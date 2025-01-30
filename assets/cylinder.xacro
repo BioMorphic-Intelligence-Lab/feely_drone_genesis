@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="cylinder">
+
+    <xacro:property name="sqrt2" value="1.41421356237" />
+
+    <xacro:property name="radius" value="0.125" />
+    <xacro:property name="length" value="${5 * sqrt2}" />
+    <xacro:property name="m" value="1" />
+
+    <!-- Wrap the entire robot definition in a macro -->
+    <xacro:macro name="cylinder" params="xyz rpy">
+        <link name="world"/>
+
+        <link name="base">
+            <visual>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <cylinder radius="${radius}" length="${length}"/>
+                </geometry>
+            </visual>
+            <collision>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <geometry>
+                    <cylinder radius="${radius}" length="${length}"/>
+                </geometry>
+            </collision>
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="${m}" />
+                <inertia ixx="${1.0/12.0 * m * (3 * radius*radius + length*length)}"
+                        ixy="0.0" ixz="0.0"
+                        iyy="${1.0/12.0 * m * (3 * radius*radius + length*length)}" 
+                        iyz="0.0"
+                        izz="${1.0/2.0 * m * length*length}" />
+            </inertial>
+        </link>
+
+        <joint name="base_joint" type="fixed">
+            <parent link="world"/>
+            <child link="base"/>
+            <origin xyz="${xyz}" rpy="${rpy}"/>
+        </joint>
+    </xacro:macro>
+
+    <xacro:cylinder xyz="0.0 0.0 0.0" rpy="0 0 0" />
+</robot>
