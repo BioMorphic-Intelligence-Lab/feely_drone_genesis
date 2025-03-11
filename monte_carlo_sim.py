@@ -119,12 +119,12 @@ def main():
             np.concatenate([p_ini, yaw_ini, np.zeros([args.n_envs, 9])], axis=1)
         )
         # Init the cylinder pos
-        cylinder.set_pos([target_positions[trial, :] for _ in range(args.n_envs)])
+        cylinder.set_pos(np.array([target_positions[trial, :] for _ in range(args.n_envs)]))
          # Ensure `euler` has shape (len(env_idx), 3)
         euler = np.stack([
             np.zeros(args.n_envs),    # X rotation (zero)
             90 * np.ones(args.n_envs),    # Y rotation (zero)
-            np.rad2deg(target_angles[trial]) * np.ones(args.n_envs) # Z rotation (converted to degrees)
+            target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
         ], axis=1)  # Shape: (len(env_idx), 3)
 
         # Convert to quaternion
