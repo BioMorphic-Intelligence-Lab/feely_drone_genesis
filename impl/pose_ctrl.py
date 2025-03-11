@@ -4,7 +4,7 @@ class PoseCtrl:
 
     def __init__(self, m_total, dt,
                     g=np.array([0, 0, -9.81]),
-                    kp=200, ki=10,
+                    kp=200, ki=1,
                     kd=100, ky=200, komega=100):
         
         # Remember time constant

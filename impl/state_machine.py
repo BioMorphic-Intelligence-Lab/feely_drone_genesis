@@ -22,15 +22,15 @@ class StateMachine(object):
                  p0, rot0,
                  m_total,
                  searching_pattern=None,
-                 target_pos_estimate=np.array([0, 0, 1.0]),
+                 target_pos_estimate=np.array([0, 0, 0.5]),
                  target_yaw_estimate=0,
                  tau_max=1500 * np.ones(3),
                  alpha_rate=1.0/5.0):
 
         if searching_pattern is None:
             self.searching_pattern = (CompositeSearchPattern([
-                     LinearSearchPattern(slope=[0, 0, 0.1], offset=[0, 0, 0]),
-                     SinusoidalSearchPattern(amplitude=[0.5, 0.25, 0],
+                     LinearSearchPattern(slope=[0, 0, 0.05], offset=[0, 0, 0]),
+                     SinusoidalSearchPattern(amplitude=[0.75, 0.5, 0],
                                              frequency=[1.0/10.0, 1.0/5.0, 0.0],
                                              phaseshift=[0.0, 0.0, 0.0],
                                              offset=target_pos_estimate)
@@ -65,6 +65,9 @@ class StateMachine(object):
             [                         0.0,                            0.0, m_arm[2]*0.5*l_arm[2]]
         ])
 
+        self.reference_pos = np.zeros(3)
+        self.contact_locs = self.forward_kinematics(np.zeros(4), np.reshape([q0] * 3, [3,3]))
+
     def get_des_yaw_vel(self, contacts, rot_vel=1.0):
         rows = np.sum(np.array([1.0, 3.0, 2.0]) * contacts, axis=1)
         if rows[0] == rows[2]:
@@ -78,15 +81,22 @@ class StateMachine(object):
 
     def searching_position_control(self, x, v, contact):
 
+        # Explicitly state that we are not using this here
+        _ = contact
+
+        # Extract new desired control values
         p_des, v_des = self.searching_pattern.get_ref_pos_vel(self.t)
         yaw_des = self.target_yaw_estimate
         tau = self.gripper_ctrl.open_to(self.alpha)
         
+        # Find control actions
         pos_ctrl = self.pose_ctrl.pos_ctrl(p_des, x[:3], v_des, v[:3])
         yaw_ctrl = self.pose_ctrl.yaw_ctrl(yaw_des, x[3], 0.0, v[3])
 
+        # Step forward time
         self.t += self.dt
 
+        # Return control actions
         return {'pos_ctrl': pos_ctrl,
                 'yaw_ctrl': yaw_ctrl,
                 'tau': tau,
@@ -344,7 +354,7 @@ class StateMachine(object):
                 self.state = State.ROTATION
                 print("STATE CHANGE: POSITION -> ROTATION")
             # Check for ABORT condition
-            if np.linalg.norm(x[:3] - self.target_pos_estimate) > 1.5:
+            if np.linalg.norm(x[:3] - self.reference_pos) > 1.5:
                 self.target_pos_estimate += np.array([0, 0, -0.25])
                 self.state = State.ABORT
                 print("STATE CHANGE: POSITION -> ABORT")
@@ -357,7 +367,7 @@ class StateMachine(object):
                 self.state = State.FINALIZE
                 print("STATE CHANGE: ROTATION -> FINALIZE")
             # Check for ABORT condition
-            if np.linalg.norm(x[:3] - self.target_pos_estimate) > 0.5:
+            if np.linalg.norm(x[:3] - self.reference_pos) > 1.5:
                 self.target_pos_estimate += np.array([0, 0, -0.25])
                 self.state = State.ABORT
                 print("STATE CHANGE: ROTATION -> ABORT")
@@ -373,7 +383,7 @@ class StateMachine(object):
                 self.state = State.PERCH
                 print("STATE CHANGE: FINALIZE -> PERCH")
             # Check for ABORT condition
-            if np.linalg.norm(x[:3] - self.target_pos_estimate) > 0.5:
+            if np.linalg.norm(x[:3] - self.reference_pos) > 1.5:
                 self.target_pos_estimate += np.array([0, 0, -0.25])
                 self.state = State.ABORT
                 print("STATE CHANGE: FINALIZE -> ABORT")
@@ -388,4 +398,7 @@ class StateMachine(object):
         else:
             ctrl = self.position_align_control(x, v, contact)
         
+        self.reference_pos = ctrl["p_des"]
+        self.contact_locs = self.get_contact_sensor_location(x[:4])
+
         return ctrl

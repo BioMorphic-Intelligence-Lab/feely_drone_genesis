@@ -16,6 +16,7 @@ def read_po():
     parser.add_argument("--p_ini", type=str, default="0 0 0", help="Space-separated list of initial coordinates (x y z) or None")
     parser.add_argument("--yaw_ini", type=float, default=0.0, help="Initial gripper yaw")
     parser.add_argument('--rand', action='store_true', help="Randomize initial drone position")
+    parser.add_argument('--record', action='store_true', help="Record experiment to video")
     parser.add_argument('--n_envs', type=int, default=1, help="Number of parallel environmnents")
     return parser.parse_args()
 
@@ -36,6 +37,14 @@ def main():
                 ),
                 sim_options=gs.options.SimOptions(dt=args.dt),
                 show_viewer=args.vis
+            )
+    
+    cam = scene.add_camera(
+                res    = (1280, 960),
+                pos    = (0.0, 10.0, 5),
+                lookat = (0.0, 0.0, 1.5),
+                fov    = 30,
+                GUI    = False
             )
     #plane = scene.add_entity(gs.morphs.Plane())
 
@@ -113,6 +122,9 @@ def main():
     yaw_des = np.zeros([args.n_envs, len(t), 1], dtype=float)
     state_machine_states = np.zeros([args.n_envs, len(t), 1], dtype=int)
 
+    if args.record:
+        cam.start_recording()
+
     for k in range(int(args.T / args.dt)):
 
         p = np.array(gripper.get_dofs_position())
@@ -152,6 +164,9 @@ def main():
         positions[:, k, :] = p
         velocities[:, k, :] = v
 
+        if args.record:
+            cam.render()
+
     # Save Data
     np.savez(f'logs/ang_{args.yaw:.1f}.npz',
             t=t,
@@ -161,6 +176,9 @@ def main():
             p_des=p_des,
             yaw_des=yaw_des,
             state_machine_states=state_machine_states)
+    
+    if args.record:
+        cam.stop_recording(save_to_filename='video.mp4', fps=60)
 
 if __name__=="__main__":
     main()
