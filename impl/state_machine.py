@@ -29,11 +29,14 @@ class StateMachine(object):
 
         if searching_pattern is None:
             self.searching_pattern = (CompositeSearchPattern([
-                     LinearSearchPattern(slope=[0, 0, 0.05], offset=[0, 0, 0]),
-                     SinusoidalSearchPattern(amplitude=[0.75, 0.5, 0],
-                                             frequency=[1.0/10.0, 1.0/5.0, 0.0],
-                                             phaseshift=[0.0, 0.0, 0.0],
-                                             offset=target_pos_estimate)
+                     LinearSearchPattern(params=np.stack([[0, 0, 0.5], # Slope
+                                                          [0, 0, 0]])  # Offset
+                     ),
+                     SinusoidalSearchPattern(params=np.stack([[0.75, 0.5, 0], # Amplitude
+                                                     [2.0, 1.0, 0.0], # Frequency
+                                                     [0.0, 0.0, 0.0], # Phase Shift
+                                                     target_pos_estimate]) # Offset
+                                        )
                     ])
             )
         else:
@@ -68,6 +71,8 @@ class StateMachine(object):
         self.reference_pos = np.zeros(3)
         self.contact_locs = self.forward_kinematics(np.zeros(4), np.reshape([q0] * 3, [3,3]))
 
+        self.tau_min=-1
+
     def get_des_yaw_vel(self, contacts, rot_vel=1.0):
         rows = np.sum(np.array([1.0, 3.0, 2.0]) * contacts, axis=1)
         if rows[0] == rows[2]:
@@ -85,7 +90,7 @@ class StateMachine(object):
         _ = contact
 
         # Extract new desired control values
-        p_des, v_des = self.searching_pattern.get_ref_pos_vel(self.t)
+        p_des, v_des, self.tau_min = self.searching_pattern.get_ref_pos_vel(x=x[:3], last_tau=self.tau_min)
         yaw_des = self.target_yaw_estimate
         tau = self.gripper_ctrl.open_to(self.alpha)
         

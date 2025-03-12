@@ -60,7 +60,7 @@ def main():
                 fov    = 30,
                 GUI    = False
             )
-    #plane = scene.add_entity(gs.morphs.Plane())
+    plane = scene.add_entity(gs.morphs.Plane())
 
     cylinder = scene.add_entity(
             gs.morphs.URDF(
@@ -82,7 +82,7 @@ def main():
 
     scene.build(n_envs=args.n_envs)
 
-    p_ini = np.random.uniform(low=[-1, -1, 0.0], high=[1, 1, 0.0], size=[args.n_envs, 3])
+    p_ini = np.random.uniform(low=[-1, -1, 1.0], high=[1, 1, 1.0], size=[args.n_envs, 3])
     yaw_ini = np.zeros([args.n_envs, 1])
 
     K = np.diag(100*np.ones(9))
@@ -138,7 +138,7 @@ def main():
                         m_arm=m, l_arm=l, p0=p0, rot0=rot0,
                         K=K[:3, :3], A=-0.1 * np.ones(3),
                         q0=q0[:3], g=np.array([0, 0, -9.81]),
-                        target_pos_estimate=np.array([0, 0, 1.2]),
+                        target_pos_estimate=np.array([0, 0, 1.5]),
                         target_yaw_estimate=yaw_ini[n, :])
             for n in range(args.n_envs)
         ])
@@ -156,7 +156,15 @@ def main():
         for k in range(int(args.T / args.dt)):
 
             p = np.array(gripper.get_dofs_position())
+            p += np.random.normal(loc=np.zeros_like(p),
+                                  scale=np.concatenate(([0.05, 0.05, 0.05, np.deg2rad(5)],
+                                                        np.deg2rad(5) * np.ones(9)))
+            )
             v = np.array(gripper.get_dofs_velocity())
+            v += np.random.normal(loc=np.zeros_like(v),
+                                  scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(1)],
+                                                        np.deg2rad(1) * np.ones(9)))
+            )
             actions = np.zeros_like(p)
 
             for n in range(args.n_envs):
@@ -182,6 +190,7 @@ def main():
                     scene.clear_debug_objects()
                     scene.draw_debug_sphere(sm[n].target_pos_estimate, radius=0.1, color=(1, 0, 0, 0.5))
                     scene.draw_debug_sphere(sm[n].reference_pos, radius=0.1, color=(0, 0, 1, 0.5))
+                    scene.draw_debug_spheres(sm[n].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
                     contact_sensors = np.zeros([9, 3])
                     for i in range(3):
                         for j in range(3):
@@ -208,7 +217,7 @@ def main():
         if args.angle_range is not None:
             filename = f'logs/angle/trial_{int(target_angles[trial]):02}.npz'
         elif args.position_range is not None:
-            filename = f'logs/position/trial_{float(target_positions[trial, 1]):.1f}.npz'
+            filename = f'logs/position/trial_{float(target_positions[trial, 1]):.2f}.npz'
         # Save Data
         np.savez(filename,
                 t=t,
