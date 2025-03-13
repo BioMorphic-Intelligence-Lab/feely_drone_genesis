@@ -29,11 +29,11 @@ class StateMachine(object):
 
         if searching_pattern is None:
             self.searching_pattern = (CompositeSearchPattern([
-                     LinearSearchPattern(params=np.stack([[0, 0, 0.5], # Slope
+                     LinearSearchPattern(params=np.stack([[0, 0, 0.75], # Slope
                                                           [0, 0, 0]])  # Offset
                      ),
-                     SinusoidalSearchPattern(params=np.stack([[0.75, 0.5, 0], # Amplitude
-                                                     [2.0, 1.0, 0.0], # Frequency
+                     SinusoidalSearchPattern(params=np.stack([[0.75, 0.75, 0], # Amplitude
+                                                     [4.0, 2.0, 0.0], # Frequency
                                                      [0.0, 0.0, 0.0], # Phase Shift
                                                      target_pos_estimate]) # Offset
                                         )
@@ -350,7 +350,7 @@ class StateMachine(object):
         if self.state == State.SEARCHING:
             ctrl = self.searching_position_control(x, v, contact)
             if contact.any():
-                self.target_pos_estimate = self.get_new_ref_pos(x, contact) - np.array([0, 0, 0.1])
+                self.target_pos_estimate = self.get_new_ref_pos(x, contact) - np.array([0, 0, 0.05])
                 self.state = State.POSITION
                 print("STATE CHANGE: SEARCHING -> POSITION")
         elif self.state == State.POSITION:

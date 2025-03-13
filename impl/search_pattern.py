@@ -6,7 +6,7 @@ class SearchPattern(ABC):
     Abstract base class for defining search patterns.
     """
 
-    def __init__(self, params, n=25, vel_norm=0.5, dt=0.01):
+    def __init__(self, params, n=100, vel_norm=0.5, dt=0.01):
         assert params.shape[1] == 3, "Parameters need to be three dimensional!"
         # Save the parameters
         self.params = params
@@ -68,7 +68,7 @@ class SearchPattern(ABC):
         # Cap the return value between 0 and 1 and return
         return np.clip(tau, a_min=0, a_max=1)
 
-    def field(self, x, last_tau=-1, kappa=10.0):
+    def field(self, x, last_tau=-1, kappa=50.0):
 
         # Find minimum distance trajectory point
         t_min = self.find_nearest_tau(x, last_tau=last_tau)

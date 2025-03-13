@@ -11,7 +11,7 @@ def read_po():
     parser.add_argument('--vis', action='store_true', help="Flag on whether the simulation is visualized.")
     parser.add_argument('--record', action='store_true', help="Record experiment to video")
     parser.add_argument('--dt', type=float, default=0.01, help="Simulation step size")
-    parser.add_argument('--T', type=float, default=25.0, help="Simulation end time")
+    parser.add_argument('--T', type=float, default=35.0, help="Simulation end time")
     parser.add_argument('--debug', action='store_true', help="Activate debug visualizations")
     parser.add_argument('--n_envs', type=int, default=100, help="Number of environments used per trial.")
     parser.add_argument('--angle_range', type=str, default=None, help="Space-separated list of \"min_angle max_angle step\" or None")
@@ -82,7 +82,7 @@ def main():
 
     scene.build(n_envs=args.n_envs)
 
-    p_ini = np.random.uniform(low=[-1, -1, 1.0], high=[1, 1, 1.0], size=[args.n_envs, 3])
+    p_ini = np.random.uniform(low=[-1.0, -1.0, 1.5], high=[1.0, 1.0, 1.5], size=[args.n_envs, 3])
     yaw_ini = np.zeros([args.n_envs, 1])
 
     K = np.diag(100*np.ones(9))
@@ -157,15 +157,19 @@ def main():
 
             p = np.array(gripper.get_dofs_position())
             p += np.random.normal(loc=np.zeros_like(p),
-                                  scale=np.concatenate(([0.05, 0.05, 0.05, np.deg2rad(5)],
+                                  scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
                                                         np.deg2rad(5) * np.ones(9)))
             )
             v = np.array(gripper.get_dofs_velocity())
             v += np.random.normal(loc=np.zeros_like(v),
-                                  scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(1)],
+                                  scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
                                                         np.deg2rad(1) * np.ones(9)))
             )
             actions = np.zeros_like(p)
+
+            targets = np.zeros([args.n_envs, 3])
+            reference_pos = np.zeros([args.n_envs, 3])
+            contact_sensors = np.zeros([args.n_envs * 9, 3])
 
             for n in range(args.n_envs):
 
@@ -186,22 +190,25 @@ def main():
 
                 actions[n, :] = action
 
-                if args.debug:
-                    scene.clear_debug_objects()
-                    scene.draw_debug_sphere(sm[n].target_pos_estimate, radius=0.1, color=(1, 0, 0, 0.5))
-                    scene.draw_debug_sphere(sm[n].reference_pos, radius=0.1, color=(0, 0, 1, 0.5))
-                    scene.draw_debug_spheres(sm[n].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
-                    contact_sensors = np.zeros([9, 3])
-                    for i in range(3):
-                        for j in range(3):
-                            contact_sensors[i * 3 + j, :] = sm[n].contact_locs[i, j, :]
-                    scene.draw_debug_spheres(contact_sensors, radius=0.05, color=(0, 1, 0, 0.5))
-
                 # Save current desired pose
                 input[n, k, :] = np.concatenate([sm_return['pos_ctrl'], sm_return['yaw_ctrl'], sm_return['tau']])
                 p_des[n, k, :] = sm_return['p_des']
                 yaw_des[n, k, :] = sm_return['yaw_des']
                 state_machine_states[n, k, :] = sm[n].state.value
+
+                if args.debug:
+                    targets[n, :] = sm[n].target_pos_estimate
+                    reference_pos[n, :] = sm[n].reference_pos
+                    for i in range(3):
+                        for j in range(3):
+                            contact_sensors[n*9 + i * 3 + j, :] = sm[n].contact_locs[i, j, :]
+            
+            if args.debug:
+                scene.clear_debug_objects()
+                scene.draw_debug_spheres(targets, radius=0.1, color=(1, 0, 0, 0.5))
+                scene.draw_debug_spheres(reference_pos, radius=0.1, color=(0, 0, 1, 0.5))
+                scene.draw_debug_spheres(sm[-1].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
+                scene.draw_debug_spheres(contact_sensors, radius=0.05, color=(0, 1, 0, 0.5))
 
             gripper.control_dofs_force(actions)
             scene.step()
