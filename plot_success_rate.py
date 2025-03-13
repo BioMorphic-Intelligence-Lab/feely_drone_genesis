@@ -71,6 +71,7 @@ def plot_results(pos_ran, ang_ran, success_rate_pos, success_rate_ang, time_to_p
     # Set xlims
     axs[0].set_xlim([pos_ran[0], pos_ran[-1]])
     axs[1].set_xlim([ang_ran[0], ang_ran[-1]])
+    axs[1].set_ylim([0, 100])
     
     # Time-to-Perch Error Bars
     axs_right[0].errorbar(pos_ran, time_to_perch_pos, time_to_perch_std_pos, linestyle='None', marker='o', color='black', capsize=5, markersize=5)
