@@ -83,7 +83,6 @@ def main():
     scene.build(n_envs=args.n_envs)
 
     p_ini = np.random.uniform(low=[-1.0, -1.0, 1.5], high=[1.0, 1.0, 1.5], size=[args.n_envs, 3])
-    yaw_ini = np.zeros([args.n_envs, 1])
 
     K = np.diag(100*np.ones(9))
     r = np.concatenate([np.diag(0.1 * np.ones(3)) for _ in range(3)], axis=1).T    
@@ -109,15 +108,29 @@ def main():
         q = joint.get_quat()[0, :]
         rot0[i, :, :] = R.from_quat(q, scalar_first=True).as_matrix()
 
+    # Reset the State Machines
+    sm = np.array([
+        StateMachine(dt=args.dt, tau_max=1250, m_total=gripper.get_mass(),
+                    m_arm=m, l_arm=l, p0=p0, rot0=rot0,
+                    K=K[:3, :3], A=-0.1 * np.ones(3),
+                    q0=q0[:3], g=np.array([0, 0, -9.81]),
+                    target_pos_estimate=np.array([0, 0, 1.5]),
+                    target_yaw_estimate=np.zeros([1]))
+        for _ in range(args.n_envs)
+    ])
+
     if args.record:
         cam.start_recording()
 
     # Run the monte carlo simulation
     for trial in range(len(target_angles)):
+        scene.reset()
         # Set initial state gripper
         gripper.set_dofs_position(
-            np.concatenate([p_ini, yaw_ini, np.zeros([args.n_envs, 9])], axis=1)
+            np.concatenate([p_ini, np.zeros([args.n_envs, 1]), np.zeros([args.n_envs, 9])], axis=1)
         )
+        gripper.set_dofs_velocity(np.zeros_like(gripper.get_dofs_velocity()))
+        gripper.control_dofs_force(np.zeros_like(gripper.get_dofs_force()))
         # Init the cylinder pos
         cylinder.set_pos(np.array([target_positions[trial, :] for _ in range(args.n_envs)]))
          # Ensure `euler` has shape (len(env_idx), 3)
@@ -126,22 +139,14 @@ def main():
             90 * np.ones(args.n_envs),    # Y rotation (zero)
             target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
         ], axis=1)  # Shape: (len(env_idx), 3)
-
         # Convert to quaternion
         quat = gs.utils.geom.xyz_to_quat(euler)
         cylinder.set_quat(quat)
-        scene.step()
 
-        # Reset the State Machines
-        sm = np.array([
-            StateMachine(dt=args.dt, tau_max=1250, m_total=gripper.get_mass(),
-                        m_arm=m, l_arm=l, p0=p0, rot0=rot0,
-                        K=K[:3, :3], A=-0.1 * np.ones(3),
-                        q0=q0[:3], g=np.array([0, 0, -9.81]),
-                        target_pos_estimate=np.array([0, 0, 1.5]),
-                        target_yaw_estimate=yaw_ini[n, :])
-            for n in range(args.n_envs)
-        ])
+        # Reset the state machines
+        for n in range(args.n_envs):
+            sm[n].reset()
+        scene.step()
 
         # Init data storage arrays
         t = np.arange(0, args.T, args.dt)
@@ -156,15 +161,15 @@ def main():
         for k in range(int(args.T / args.dt)):
 
             p = np.array(gripper.get_dofs_position())
-            p += np.random.normal(loc=np.zeros_like(p),
-                                  scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
-                                                        np.deg2rad(5) * np.ones(9)))
-            )
+            #p += np.random.normal(loc=np.zeros_like(p),
+            #                      scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
+            #                                            np.zeros(9)))
+            #)
             v = np.array(gripper.get_dofs_velocity())
-            v += np.random.normal(loc=np.zeros_like(v),
-                                  scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
-                                                        np.deg2rad(1) * np.ones(9)))
-            )
+            #v += np.random.normal(loc=np.zeros_like(v),
+            #                      scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
+            #                                            np.zeros(9)))
+            #)
             actions = np.zeros_like(p)
 
             targets = np.zeros([args.n_envs, 3])

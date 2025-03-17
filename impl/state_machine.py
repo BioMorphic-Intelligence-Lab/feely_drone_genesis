@@ -23,7 +23,7 @@ class StateMachine(object):
                  m_total,
                  searching_pattern=None,
                  target_pos_estimate=np.array([0, 0, 0.5]),
-                 target_yaw_estimate=0,
+                 target_yaw_estimate=np.zeros(1),
                  tau_max=1500 * np.ones(3),
                  alpha_rate=1.0/5.0):
 
@@ -33,8 +33,8 @@ class StateMachine(object):
                                                           [0, 0, 0]])  # Offset
                      ),
                      SinusoidalSearchPattern(params=np.stack([[0.75, 0.75, 0], # Amplitude
-                                                     [4.0, 2.0, 0.0], # Frequency
-                                                     [0.0, 0.0, 0.0], # Phase Shift
+                                                     [6.0, 3.0, 0.0], # Frequency
+                                                     [0.0, np.pi/2, 0.0], # Phase Shift
                                                      target_pos_estimate]) # Offset
                                         )
                     ])
@@ -44,6 +44,8 @@ class StateMachine(object):
 
         self.dt = dt
         self.t = 0
+        self.init_target_pos_estimate = target_pos_estimate.copy()
+        self.init_target_yaw_estimate = target_yaw_estimate.copy()
         self.target_yaw_estimate = target_yaw_estimate
         self.target_pos_estimate = target_pos_estimate
         self.alpha_rate = alpha_rate
@@ -72,6 +74,24 @@ class StateMachine(object):
         self.contact_locs = self.forward_kinematics(np.zeros(4), np.reshape([q0] * 3, [3,3]))
 
         self.tau_min=-1
+
+    def reset(self):
+
+        self.t=0
+        self.target_pos_estimate = self.init_target_pos_estimate.copy()
+        self.target_yaw_estimate = self.init_target_yaw_estimate.copy()
+        self.alpha = np.ones(3)
+        self.state = State.SEARCHING   
+
+        self.tactile_info_sw = np.zeros([10, 3, 3], dtype=float)
+        self.pose_ctrl.reset()
+        self.gripper_ctrl.reset()
+
+        self.reference_pos = np.zeros(3)
+        self.contact_locs = self.forward_kinematics(np.zeros(4), np.reshape([self.q0] * 3, [3,3]))
+
+        self.tau_min=-1
+
 
     def get_des_yaw_vel(self, contacts, rot_vel=1.0):
         rows = np.sum(np.array([1.0, 3.0, 2.0]) * contacts, axis=1)
@@ -350,7 +370,7 @@ class StateMachine(object):
         if self.state == State.SEARCHING:
             ctrl = self.searching_position_control(x, v, contact)
             if contact.any():
-                self.target_pos_estimate = self.get_new_ref_pos(x, contact) - np.array([0, 0, 0.05])
+                self.target_pos_estimate = self.get_new_ref_pos(x, contact) - np.array([0, 0, 0.1])
                 self.state = State.POSITION
                 print("STATE CHANGE: SEARCHING -> POSITION")
         elif self.state == State.POSITION:

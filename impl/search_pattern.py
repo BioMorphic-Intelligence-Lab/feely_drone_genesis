@@ -6,7 +6,7 @@ class SearchPattern(ABC):
     Abstract base class for defining search patterns.
     """
 
-    def __init__(self, params, n=100, vel_norm=0.5, dt=0.01):
+    def __init__(self, params, n=100, vel_norm=1.0, dt=0.01):
         assert params.shape[1] == 3, "Parameters need to be three dimensional!"
         # Save the parameters
         self.params = params

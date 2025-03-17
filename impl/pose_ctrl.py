@@ -24,6 +24,9 @@ class PoseCtrl:
 
         # Init integral errors
         self.p_err_I = np.zeros(3)
+    
+    def reset(self):
+        self.p_err_I = np.zeros(3)
 
     def pos_ctrl(self, p_des, p, v_des, v):
         p_err = p_des - p
