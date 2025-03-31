@@ -4,7 +4,7 @@ import numpy as np
 
 from scipy.spatial.transform import Rotation as R
 
-from impl import StateMachine
+from feely_drone_common import StateMachine, get_urdf_path
 
 def read_po():
     parser = argparse.ArgumentParser(description="Simulation of the feely drone.")
@@ -64,16 +64,16 @@ def main():
 
     cylinder = scene.add_entity(
             gs.morphs.URDF(
-                file="./assets/cylinder.urdf",  # Path to your URDF file
+                file=get_urdf_path("cylinder.urdf"),  # Path to your URDF file
                 pos=[0, 0, 2],
                 euler=[0, 90, 0.0],
                 fixed=True
             )
-        )
+    )
 
     gripper = scene.add_entity(
         gs.morphs.URDF(
-                file="./assets/gripper.urdf",  # Path to your URDF file
+                file=get_urdf_path("gripper.urdf"),  # Path to your URDF file
                 pos=[0, 0, 0],
                 euler=[0, 0, 0],
                 fixed=True
