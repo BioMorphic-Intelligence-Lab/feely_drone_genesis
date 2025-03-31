@@ -6,9 +6,10 @@ class SearchPattern(ABC):
     Abstract base class for defining search patterns.
     """
 
-    def __init__(self, params, n=100, vel_norm=1.0, dt=0.01):
+    def __init__(self, params, n=25, vel_norm=1.0, dt=0.01):
         assert params.shape[1] == 3, "Parameters need to be three dimensional!"
         # Save the parameters
+        self.init_params = params
         self.params = params
         # Create a discrete set of sampling points along tau
         self.tau_dis = np.linspace(0, 1, n)
@@ -37,6 +38,26 @@ class SearchPattern(ABC):
         """
         Compute the velocity at point tau along the search pattern.
         """
+        pass
+
+    def reset(self):
+        """
+        Reset the search pattern to its initial state.
+        """
+        self.params = self.init_params
+
+        # Find the corresponding trajectory points
+        self.traj_dis = np.array([self.f(tau) for tau in self.tau_dis])
+
+    def step_height(self, dh):
+        """
+        Add a step height to the search pattern.
+        """
+        # Update height of search pattern
+        self.params[-1, 2] += dh
+
+        # Find the corresponding trajectory points
+        self.traj_dis = np.array([self.f(tau) for tau in self.tau_dis])
 
     def find_nearest_tau(self, x, last_tau=-1, iter=2):
         """
@@ -155,3 +176,20 @@ class CompositeSearchPattern(SearchPattern):
         for pattern in self.patterns:
             acc += pattern.ddf(tau)
         return acc
+    
+    def step_height(self, dh):
+        for pattern in self.patterns:
+            pattern.step_height(dh / len(self.patterns))
+
+        # Find the corresponding trajectory points
+        self.traj_dis = np.array([self.f(tau) for tau in self.tau_dis])
+
+    def reset(self):
+        """
+        Reset the search pattern to its initial state.
+        """
+        for pattern in self.patterns:
+            pattern.params = pattern.init_params
+
+        # Find the corresponding trajectory points
+        self.traj_dis = np.array([self.f(tau) for tau in self.tau_dis])

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
+from impl.state_machine import State
 
 # Define Colors
 COLORS = {
@@ -27,7 +28,7 @@ def parse_arguments():
 
 def load_data(file_path):
     data = np.load(file_path)
-    return data['state_machine_states'], data['t']
+    return data['state_machine_states'], data['positions'], data['t']
 
 def compute_metrics(value_range, data_path_template):
     num_values = len(value_range)
@@ -37,14 +38,25 @@ def compute_metrics(value_range, data_path_template):
     
     for i, value in enumerate(value_range):
         file_path = data_path_template.format(value)
-        states, t = load_data(file_path)
+        states, positions, t = load_data(file_path)
         
-        perch_indices = np.argmax(states == 5, axis=1)
-        perch_indices[~np.any(states == 5, axis=1)] = -1
+        perch_indices = np.argmax(states == State.PERCH.value, axis=1).flatten()
+        perch_indices[~np.any(states == State.PERCH.value, axis=1).flatten()] = -1
+
+        end_height =  (positions[:, -1, 2] > 1.75).flatten()
+        perched = (states[:, -1] == State.PERCH.value).flatten()
+        # Make sure we're actually perched by checking the height
+        # otherwise set perch index to -1
+        perch_indices[~end_height] = -1
         
-        time_to_perch[i] = np.mean(t[perch_indices])
-        time_to_perch_std[i] = np.std(t[perch_indices])
-        success_rates[i] = np.sum(states[:, -1] == 5) / states.shape[0] * 100.0
+        valid_perch_indices = perch_indices[perch_indices != -1]
+        time_to_perch[i] = np.mean(t[valid_perch_indices]) if len(valid_perch_indices) > 0 else 0
+        time_to_perch_std[i] = np.std(t[valid_perch_indices]) if len(valid_perch_indices) > 0 else 0
+        success_rates[i] = np.sum(
+            np.logical_and(
+                perched, end_height
+            )
+        ) / states.shape[0] * 100.0
     
     return success_rates, time_to_perch, time_to_perch_std
 
@@ -69,8 +81,10 @@ def plot_results(pos_ran, ang_ran, success_rate_pos, success_rate_ang, time_to_p
     axs[1].set_xticks(np.linspace(-90, 90, 5))
 
     # Set xlims
-    axs[0].set_xlim([pos_ran[0], pos_ran[-1]])
-    axs[1].set_xlim([ang_ran[0], ang_ran[-1]])
+    axs[0].set_xlim([pos_ran[0] - 0.5 * (pos_ran[1] - pos_ran[0]),
+                     pos_ran[-1]+ 0.5 * (pos_ran[1] - pos_ran[0])])
+    axs[1].set_xlim([ang_ran[0] - 0.5 * (ang_ran[1] - ang_ran[0]),
+                     ang_ran[-1]+ 0.5 * (ang_ran[1] - ang_ran[0])])
     axs[1].set_ylim([0, 100])
     
     # Time-to-Perch Error Bars
