@@ -3,8 +3,9 @@ import genesis as gs
 import numpy as np
 
 from scipy.spatial.transform import Rotation as R
-
-from feely_drone_common import StateMachine, get_urdf_path
+from feely_drone_common import (StateMachine, PoseCtrl, GripperCtrl,
+                                SinusoidalSearchPattern,
+                                get_urdf_path)
 
 def read_po():
     parser = argparse.ArgumentParser(description="Simulation of the feely drone.")
@@ -16,6 +17,7 @@ def read_po():
     parser.add_argument('--n_envs', type=int, default=100, help="Number of environments used per trial.")
     parser.add_argument('--angle_range', type=str, default=None, help="Space-separated list of \"min_angle max_angle step\" or None")
     parser.add_argument('--position_range', type=str, default=None, help="Space-separated list of \"min_pos max_pos step\" or None")
+    parser.add_argument('--video_fps', type=int, default=25, help="Output FPS of the video recording")
     return parser.parse_args()
 
 def main():
@@ -71,6 +73,17 @@ def main():
             )
     )
 
+    
+    cyberzoo = scene.add_entity(
+        gs.morphs.URDF(
+                file=get_urdf_path("cyberzoo.urdf"),  # Path to your URDF file
+                pos=[-5, -5, 0.01],
+                euler=[0, 0, 0],
+                fixed=True,
+                scale=0.025  # Adjust the scale if necessary
+            )
+    )
+
     gripper = scene.add_entity(
         gs.morphs.URDF(
                 file=get_urdf_path("gripper.urdf"),  # Path to your URDF file
@@ -104,20 +117,51 @@ def main():
     rot0 = np.zeros([3, 3, 3])
     for i in range(3):
         joint = gripper.get_joint(name=f"arm{i+1}_joint1")
-        p0[i, :] = np.array(joint.get_pos()[0, :]) 
+        
         q = joint.get_quat()[0, :]
         rot0[i, :, :] = R.from_quat(q, scalar_first=True).as_matrix()
 
+        p0[i, :] = np.array(joint.get_pos()[0, :]) - rot0[i, :, :] @ np.array([0, 0, 0.025]) 
+        
+    # Initial target position estimate
+    init_target_pos_estimate=np.array([0, 0, 1.9])
+    init_target_yaw_estimate=np.zeros([1])
+
     # Reset the State Machines
     sm = np.array([
-        StateMachine(dt=args.dt, tau_max=1250, m_total=gripper.get_mass(),
-                    m_arm=m, l_arm=l, p0=p0, rot0=rot0,
-                    K=K[:3, :3], A=-0.1 * np.ones(3),
-                    q0=q0[:3], g=np.array([0, 0, -9.81]),
-                    target_pos_estimate=np.array([0, 0, 1.7]),
-                    target_yaw_estimate=np.zeros([1]))
+        StateMachine(dt=args.dt,            # Delta T
+                     m_arm=np.ones(3),                   # Mass of the Arm
+                     l_arm=l, # Length of the Arm
+                     p0=p0,                              # Offset Position of Arms
+                     rot0=rot0,                          # Offset Rotation of Arms
+                     K=np.diag(100*np.ones(3)),          # Stiffness Matrix of the arm
+                     A=-120 * np.ones(3),                # Actuation map
+                     q0=np.deg2rad(75) * np.ones(3),     # Neutral joint states
+                     g=np.array([0, 0, -9.81]),          # Gravity Vector
+                     target_pos_estimate=init_target_pos_estimate,
+                     target_yaw_estimate=init_target_yaw_estimate,
+                     searching_pattern=SinusoidalSearchPattern(
+                           params=np.stack([
+                                np.array([0.5, 0.5, 0]),     # Amplitude
+                                np.array([2.0, 1.0, 0.0]),   # Frequency
+                                np.array([0.0, 0.0, 0.0]),   # Phase Shift
+                                init_target_pos_estimate - np.array([0, 0, 0.2]) # Offset
+                            ]),
+                            dt=args.dt,
+                            vel_norm=0.25)
+        )
         for _ in range(args.n_envs)
     ])
+
+    # Init the low leverl controllers
+    pose_ctrl = PoseCtrl(
+        m_total=gripper.get_mass(),
+        dt=args.dt,
+        g=np.array([0, 0, -9.81]),
+        kp=250, ki=25, kd=100,
+        ky=20, komega=5
+    )
+    gripper_ctrl = GripperCtrl(tau_max=1250)
 
     if args.record:
         cam.start_recording()
@@ -161,15 +205,15 @@ def main():
         for k in range(int(args.T / args.dt)):
 
             p = np.array(gripper.get_dofs_position())
-            p += np.random.normal(loc=np.zeros_like(p),
-                                  scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
-                                                        np.zeros(9)))
-            )
+            #p += np.random.normal(loc=np.zeros_like(p),
+            #                      scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
+            #                                            np.zeros(9)))
+            #)
             v = np.array(gripper.get_dofs_velocity())
-            v += np.random.normal(loc=np.zeros_like(v),
-                                  scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
-                                                        np.zeros(9)))
-            )
+            #v += np.random.normal(loc=np.zeros_like(v),
+            #                      scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
+            #                                            np.zeros(9)))
+            #)
             actions = np.zeros_like(p)
 
             targets = np.zeros([args.n_envs, 3])
@@ -188,15 +232,19 @@ def main():
                 stiffness_contrib = K @ (q0 - p[n, 4:])
 
                 sm_return = sm[n].control(p[n, :], v[n, :], contact)
-
-                action = np.concatenate([sm_return['pos_ctrl'], sm_return['yaw_ctrl'],
-                                        stiffness_contrib
-                                        - r @ sm_return['tau']])
+                pos_ctrl = pose_ctrl.pos_ctrl(sm_return['p_des'], p[n,:3], sm_return['v_des'][:3], v[n, :3])
+                yaw_ctrl = pose_ctrl.yaw_ctrl(sm_return['yaw_des'], p[n, 3], sm_return['v_des'][3], v[n, 3])
+                tau_ctrl = gripper_ctrl.open_to(sm_return['alpha'])
+                action = np.concatenate([
+                    pos_ctrl,
+                    yaw_ctrl,
+                    stiffness_contrib - r @ tau_ctrl
+                ])
 
                 actions[n, :] = action
 
                 # Save current desired pose
-                input[n, k, :] = np.concatenate([sm_return['pos_ctrl'], sm_return['yaw_ctrl'], sm_return['tau']])
+                input[n, k, :] = np.concatenate([pos_ctrl, yaw_ctrl, tau_ctrl])
                 p_des[n, k, :] = sm_return['p_des']
                 yaw_des[n, k, :] = sm_return['yaw_des']
                 state_machine_states[n, k, :] = sm[n].state.value
@@ -210,10 +258,10 @@ def main():
             
             if args.debug:
                 scene.clear_debug_objects()
-                scene.draw_debug_spheres(targets, radius=0.1, color=(1, 0, 0, 0.5))
-                scene.draw_debug_spheres(reference_pos, radius=0.1, color=(0, 0, 1, 0.5))
+                scene.draw_debug_spheres(targets, radius=0.05, color=(1, 0, 0, 0.5))
+                scene.draw_debug_spheres(reference_pos, radius=0.05, color=(0, 0, 1, 0.5))
                 scene.draw_debug_spheres(sm[-1].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
-                scene.draw_debug_spheres(contact_sensors, radius=0.05, color=(0, 1, 0, 0.5))
+                scene.draw_debug_spheres(contact_sensors, radius=0.01, color=(0, 1, 0, 0.5))
 
             gripper.control_dofs_force(actions)
             scene.step()
@@ -223,7 +271,7 @@ def main():
             positions[:, k, :] = p
             velocities[:, k, :] = v
 
-            if args.record:
+            if args.record and k % int(1.0 / args.dt / args.video_fps) == 0:
                 cam.render()
 
         if args.angle_range is not None:
@@ -241,7 +289,7 @@ def main():
                 state_machine_states=state_machine_states)
 
         if args.record:
-            cam.stop_recording(save_to_filename='video.mp4', fps=24)
+            cam.stop_recording(save_to_filename='video.mp4', fps=args.video_fps)
 
 if __name__=="__main__":
     main()
