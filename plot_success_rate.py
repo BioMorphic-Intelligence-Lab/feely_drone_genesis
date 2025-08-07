@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import argparse
-from impl.state_machine import State
+from feely_drone_common.state_machine import State
 
 # Define Colors
 COLORS = {
@@ -15,9 +16,10 @@ COLORS = {
     "color_contact": "red"
 }
 
-# Matplotlib Configuration
-plt.rcParams['text.usetex'] = True
-plt.rc('font', family='normal', weight='bold', size=31)
+import matplotlib as mpl
+mpl.rcParams['text.usetex'] = False
+mpl.rcParams['svg.fonttype'] = 'none'
+mpl.rcParams['axes.unicode_minus'] = False
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Plotting script for Evaluating Monte Carlo Sim")
@@ -61,23 +63,34 @@ def compute_metrics(value_range, data_path_template):
     return success_rates, time_to_perch, time_to_perch_std
 
 def plot_results(pos_ran, ang_ran, success_rate_pos, success_rate_ang, time_to_perch_pos, time_to_perch_ang, time_to_perch_std_pos, time_to_perch_std_ang):
-    fig, axs = plt.subplots(2, figsize=(25, 13))
-    fig.subplots_adjust(bottom=-0.1)
-    axs_right = [ax.twinx() for ax in axs]
+        
+    fig = plt.figure()
+    gs = gridspec.GridSpec(1, 2, hspace=0.01, wspace=0.05,
+                           left=0.1, right=0.9, top=0.95, bottom=0.2) 
+    ax1 = fig.add_subplot(gs[0])
+    ax2 = fig.add_subplot(gs[1], sharey=ax1)
+    axs = [ax1, ax2]
+    fig.set_size_inches(20, 5)
+
+    #fig.subplots_adjust(bottom=-0.1)
+    ax1_right = ax1.twinx()
+    ax2_right = ax2.twinx()
+    ax2_right.sharey(ax1_right)
+    axs_right = [ax1_right, ax2_right]
 
     # Success Rate Bar Plots
     axs[0].bar(pos_ran, success_rate_pos, color=COLORS["biomorphic_blue"], width=0.9 * (pos_ran[1] - pos_ran[0]), alpha=0.8)
     axs[1].bar(ang_ran, success_rate_ang, color=COLORS["biomorphic_blue"], width=0.9 * (ang_ran[1] - ang_ran[0]), alpha=0.8)
 
     # Formatting
-    axs[0].set_xlabel(r"Position Offset [$m$]")
-    axs[0].set_ylabel(r"Success Rate [\%]", color=COLORS["biomorphic_blue"])
-    axs_right[0].set_ylabel(r"Time-to-Perch [$s$]")
+    axs[0].set_xlabel(r"Position Offset [\$m\$]")
+    axs[0].set_ylabel(r"Success Rate [%]", color=COLORS["biomorphic_blue"])
+    #axs_right[0].set_ylabel(r"Time-to-Perch [\$s\$]")
     axs[0].set_ylim([0, 100])
 
-    axs[1].set_xlabel(r"Angular Offset [$^\circ$]")
-    axs[1].set_ylabel(r"Success Rate [\%]", color=COLORS["biomorphic_blue"])
-    axs_right[1].set_ylabel(r"Time-to-Perch [$s$]")
+    axs[1].set_xlabel(r"Angular Offset [\$^\circ\$]")
+    #axs[1].set_ylabel(r"Success Rate [%]", color=COLORS["biomorphic_blue"])
+    axs_right[1].set_ylabel(r"Time-to-Perch [\$s\$]")
     axs[1].set_xticks(np.linspace(-90, 90, 5))
 
     # Set xlims
@@ -88,10 +101,29 @@ def plot_results(pos_ran, ang_ran, success_rate_pos, success_rate_ang, time_to_p
     axs[1].set_ylim([0, 100])
     
     # Time-to-Perch Error Bars
-    axs_right[0].errorbar(pos_ran, time_to_perch_pos, time_to_perch_std_pos, linestyle='None', marker='o', color='black', capsize=5, markersize=5)
-    axs_right[1].errorbar(ang_ran, time_to_perch_ang, time_to_perch_std_ang, linestyle='None', marker='o', color='black', capsize=5, markersize=5)
+    axs_right[0].errorbar(pos_ran, time_to_perch_pos, time_to_perch_std_pos, linestyle='None', marker='o', color='black', capsize=2, markersize=2)
+    axs_right[1].errorbar(ang_ran, time_to_perch_ang, time_to_perch_std_ang, linestyle='None', marker='o', color='black', capsize=2, markersize=2)
     
-    fig.savefig("perching_success.svg", bbox_inches="tight")
+    xlabelpad = 20
+    ylabelpad = 55
+    tickpad = 20
+    axs[0].xaxis.labelpad = xlabelpad
+    axs[0].tick_params(axis='both', pad=tickpad)
+    axs[1].xaxis.labelpad = xlabelpad
+    axs[1].tick_params(axis='both', pad=tickpad)
+    axs[1].tick_params(axis='y', labelleft=False)
+    axs_right[0].xaxis.labelpad = xlabelpad
+    axs_right[0].tick_params(axis='both', pad=tickpad)
+    axs_right[0].tick_params(axis='y', labelright=False)
+    axs_right[1].xaxis.labelpad = xlabelpad
+    axs_right[1].tick_params(axis='both', pad=tickpad)
+
+    axs[0].yaxis.labelpad = ylabelpad
+    axs[1].yaxis.labelpad = ylabelpad
+    axs_right[0].yaxis.labelpad = ylabelpad
+    axs_right[1].yaxis.labelpad = ylabelpad
+
+    fig.savefig("perching_success.svg")
 
 def main():
     args = parse_arguments()
