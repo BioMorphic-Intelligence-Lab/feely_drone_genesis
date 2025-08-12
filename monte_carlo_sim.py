@@ -124,7 +124,7 @@ def main():
         p0[i, :] = np.array(joint.get_pos()[0, :]) - rot0[i, :, :] @ np.array([0, 0, 0.025]) 
         
     # Initial target position estimate
-    init_target_pos_estimate=np.array([0, 0, 1.9])
+    init_target_pos_estimate=np.array([0, 0, 1.95])
     init_target_yaw_estimate=np.zeros([1])
 
     # Reset the State Machines
@@ -205,15 +205,15 @@ def main():
         for k in range(int(args.T / args.dt)):
 
             p = np.array(gripper.get_dofs_position())
-            #p += np.random.normal(loc=np.zeros_like(p),
-            #                      scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
-            #                                            np.zeros(9)))
-            #)
+            p += np.random.normal(loc=np.zeros_like(p),
+                                  scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
+                                                        np.zeros(9)))
+            )
             v = np.array(gripper.get_dofs_velocity())
-            #v += np.random.normal(loc=np.zeros_like(v),
-            #                      scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
-            #                                            np.zeros(9)))
-            #)
+            v += np.random.normal(loc=np.zeros_like(v),
+                                  scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
+                                                        np.zeros(9)))
+            )
             actions = np.zeros_like(p)
 
             targets = np.zeros([args.n_envs, 3])
