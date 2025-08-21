@@ -9,6 +9,7 @@ from feely_drone_common import (StateMachine, PoseCtrl, GripperCtrl,
 
 def read_po():
     parser = argparse.ArgumentParser(description="Simulation of the feely drone.")
+    parser.add_argument('--full_vis', action='store_true', help="Flag on whether to use the full meshes for visualization.")
     parser.add_argument('--vis', action='store_true', help="Flag on whether the simulation is visualized.")
     parser.add_argument('--record', action='store_true', help="Record experiment to video")
     parser.add_argument('--dt', type=float, default=0.01, help="Simulation step size")
@@ -33,12 +34,12 @@ def main():
         target_positions = np.zeros([len(target_angles), 3])
         target_positions[:, 2] = 2.0 
     elif args.position_range is not None:
-        positional_offsets_y = np.arange(*np.fromstring(args.position_range, sep=" "))
-        positional_offsets_y = positional_offsets_y.reshape([positional_offsets_y.size, 1])
-        target_positions = np.concatenate([np.zeros_like(positional_offsets_y),
-                                           positional_offsets_y,
-                                           2.0 * np.ones_like(positional_offsets_y)], axis=1)
-        target_angles = np.zeros([len(positional_offsets_y), 1])
+        positional_offsets_x = np.arange(*np.fromstring(args.position_range, sep=" "))
+        positional_offsets_x = positional_offsets_x.reshape([positional_offsets_x.size, 1])
+        target_positions = np.concatenate([positional_offsets_x,
+                                           np.zeros_like(positional_offsets_x),
+                                           2.0 * np.ones_like(positional_offsets_x)], axis=1)
+        target_angles = np.zeros([len(positional_offsets_x), 1])
 
     gs.init(backend=gs.cpu, precision="32", logging_level='warning')
 
@@ -72,30 +73,39 @@ def main():
                 fixed=True
             )
     )
-
     
-    cyberzoo = scene.add_entity(
-        gs.morphs.URDF(
-                file=get_urdf_path("cyberzoo.urdf"),  # Path to your URDF file
-                pos=[-5, -5, 0.01],
-                euler=[0, 0, 0],
-                fixed=True,
-                scale=0.025  # Adjust the scale if necessary
-            )
-    )
+    if args.full_vis:
+        cyberzoo = scene.add_entity(
+            gs.morphs.URDF(
+                    file=get_urdf_path("cyberzoo.urdf"),  # Path to your URDF file
+                    pos=[-5, -5, 0.01],
+                    euler=[0, 0, 0],
+                    fixed=True,
+                    scale=0.025  # Adjust the scale if necessary
+                )
+        )
 
-    gripper = scene.add_entity(
-        gs.morphs.URDF(
-                file=get_urdf_path("gripper.urdf"),  # Path to your URDF file
-                pos=[0, 0, 0],
-                euler=[0, 0, 0],
-                fixed=True
-            )
-    )
+        gripper = scene.add_entity(
+            gs.morphs.URDF(
+                    file=get_urdf_path("gripper_simple.urdf"),  # Path to your URDF file
+                    pos=[0, 0, 0],
+                    euler=[0, 0, 0],
+                    fixed=True
+                )
+        )
+    else:
+        gripper = scene.add_entity(
+            gs.morphs.URDF(
+                    file=get_urdf_path("gripper.urdf"),  # Path to your URDF file
+                    pos=[0, 0, 0],
+                    euler=[0, 0, 0],
+                    fixed=True
+                )
+        )
 
     scene.build(n_envs=args.n_envs)
 
-    p_ini = np.random.uniform(low=[-1.0, -1.0, 1.5], high=[1.0, 1.0, 1.5], size=[args.n_envs, 3])
+    p_ini = np.random.uniform(low=[-1.0, -1.0, 0.25], high=[1.0, 1.0, 0.25], size=[args.n_envs, 3])
 
     K = np.diag(100*np.ones(9))
     r = np.concatenate([np.diag(0.1 * np.ones(3)) for _ in range(3)], axis=1).T    
@@ -145,7 +155,7 @@ def main():
                                 np.array([0.5, 0.5, 0]),     # Amplitude
                                 np.array([2.0, 1.0, 0.0]),   # Frequency
                                 np.array([0.0, 0.0, 0.0]),   # Phase Shift
-                                init_target_pos_estimate - np.array([0, 0, 0.2]) # Offset
+                                init_target_pos_estimate - np.array([0, 0, 0.075]) # Offset
                             ]),
                             dt=args.dt,
                             vel_norm=0.25)
@@ -261,7 +271,12 @@ def main():
                 scene.draw_debug_spheres(targets, radius=0.05, color=(1, 0, 0, 0.5))
                 scene.draw_debug_spheres(reference_pos, radius=0.05, color=(0, 0, 1, 0.5))
                 scene.draw_debug_spheres(sm[-1].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
-                scene.draw_debug_spheres(contact_sensors, radius=0.01, color=(0, 1, 0, 0.5))
+                contact_marker_color = [(0, 1, 0, 0.5) for _ in range(9)]
+                for i in range(9):
+                    if contact[i // 3, i % 3]:
+                        contact_marker_color[i] = (1, 1, 0, 0.5)
+                scene.draw_debug_spheres(contact_sensors, radius=0.01,
+                                         color=contact_marker_color)
 
             gripper.control_dofs_force(actions)
             scene.step()
