@@ -58,8 +58,8 @@ def main():
 
     cam = scene.add_camera(
                 res    = (1280, 960),
-                pos    = (0.0, 10.0, 5),
-                lookat = (0.0, 0.0, 1.5),
+                pos    = (0.0, 5.0, 4.0),
+                lookat = (0.0, 0.0, 1.0),
                 fov    = 30,
                 GUI    = False
             )
@@ -87,7 +87,7 @@ def main():
 
         gripper = scene.add_entity(
             gs.morphs.URDF(
-                    file=get_urdf_path("gripper_simple.urdf"),  # Path to your URDF file
+                    file=get_urdf_path("gripper.urdf"),  # Path to your URDF file
                     pos=[0, 0, 0],
                     euler=[0, 0, 0],
                     fixed=True
@@ -96,7 +96,7 @@ def main():
     else:
         gripper = scene.add_entity(
             gs.morphs.URDF(
-                    file=get_urdf_path("gripper.urdf"),  # Path to your URDF file
+                    file=get_urdf_path("gripper_simple.urdf"),  # Path to your URDF file
                     pos=[0, 0, 0],
                     euler=[0, 0, 0],
                     fixed=True
@@ -134,14 +134,15 @@ def main():
         p0[i, :] = np.array(joint.get_pos()[0, :]) - rot0[i, :, :] @ np.array([0, 0, 0.025]) 
         
     # Initial target position estimate
-    init_target_pos_estimate=np.array([0, 0, 1.95])
+    init_target_pos_estimate=np.array([0, 0, 1.90])
     init_target_yaw_estimate=np.zeros([1])
 
     # Reset the State Machines
     sm = np.array([
         StateMachine(dt=args.dt,            # Delta T
                      m_arm=np.ones(3),                   # Mass of the Arm
-                     l_arm=l, # Length of the Arm
+                     l_arm=l,                            # Length of the Arm
+                     alpha_rate=0.1,                     # Opening and closing rate
                      p0=p0,                              # Offset Position of Arms
                      rot0=rot0,                          # Offset Rotation of Arms
                      K=np.diag(100*np.ones(3)),          # Stiffness Matrix of the arm
@@ -164,14 +165,18 @@ def main():
     ])
 
     # Init the low leverl controllers
-    pose_ctrl = PoseCtrl(
-        m_total=gripper.get_mass(),
-        dt=args.dt,
-        g=np.array([0, 0, -9.81]),
-        kp=250, ki=25, kd=100,
-        ky=20, komega=5
-    )
-    gripper_ctrl = GripperCtrl(tau_max=1250)
+    pose_ctrl = np.array([
+        PoseCtrl(
+            m_total=gripper.get_mass(),
+            dt=args.dt,
+            g=np.array([0, 0, -9.81]),
+            kp=250, ki=25, kd=150,
+            ky=20, komega=5)
+        for _ in range(args.n_envs)
+    ])
+    gripper_ctrl = np.array([
+        GripperCtrl(tau_max=1250) for _ in range(args.n_envs)
+    ])
 
     if args.record:
         cam.start_recording()
@@ -242,9 +247,9 @@ def main():
                 stiffness_contrib = K @ (q0 - p[n, 4:])
 
                 sm_return = sm[n].control(p[n, :], v[n, :], contact)
-                pos_ctrl = pose_ctrl.pos_ctrl(sm_return['p_des'], p[n,:3], sm_return['v_des'][:3], v[n, :3])
-                yaw_ctrl = pose_ctrl.yaw_ctrl(sm_return['yaw_des'], p[n, 3], sm_return['v_des'][3], v[n, 3])
-                tau_ctrl = gripper_ctrl.open_to(sm_return['alpha'])
+                pos_ctrl = pose_ctrl[n].pos_ctrl(sm_return['p_des'], p[n,:3], sm_return['v_des'][:3], v[n, :3])
+                yaw_ctrl = pose_ctrl[n].yaw_ctrl(sm_return['yaw_des'], p[n, 3], sm_return['v_des'][3], v[n, 3])
+                tau_ctrl = gripper_ctrl[n].open_to(sm_return['alpha'])
                 action = np.concatenate([
                     pos_ctrl,
                     yaw_ctrl,
@@ -292,7 +297,7 @@ def main():
         if args.angle_range is not None:
             filename = f'logs/angle/trial_{int(target_angles[trial]):02}.npz'
         elif args.position_range is not None:
-            filename = f'logs/position/trial_{float(target_positions[trial, 1]):.2f}.npz'
+            filename = f'logs/position/trial_{float(target_positions[trial, 0]):.2f}.npz'
         # Save Data
         np.savez(filename,
                 t=t,
