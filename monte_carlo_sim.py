@@ -134,7 +134,7 @@ def main():
         p0[i, :] = np.array(joint.get_pos()[0, :]) - rot0[i, :, :] @ np.array([0, 0, 0.025]) 
         
     # Initial target position estimate
-    init_target_pos_estimate=np.array([0, 0, 1.90])
+    init_target_pos_estimate=np.array([0, 0, 1.9])
     init_target_yaw_estimate=np.zeros([1])
 
     # Reset the State Machines
@@ -184,20 +184,24 @@ def main():
     # Run the monte carlo simulation
     for trial in range(len(target_angles)):
         scene.reset()
+        
         # Set initial state gripper
         gripper.set_dofs_position(
             np.concatenate([p_ini, np.zeros([args.n_envs, 1]), np.zeros([args.n_envs, 9])], axis=1)
         )
         gripper.set_dofs_velocity(np.zeros_like(gripper.get_dofs_velocity()))
         gripper.control_dofs_force(np.zeros_like(gripper.get_dofs_force()))
+        
         # Init the cylinder pos
         cylinder.set_pos(np.array([target_positions[trial, :] for _ in range(args.n_envs)]))
-         # Ensure `euler` has shape (len(env_idx), 3)
+        
+        # Ensure `euler` has shape (len(env_idx), 3)
         euler = np.stack([
             np.zeros(args.n_envs),    # X rotation (zero)
             90 * np.ones(args.n_envs),    # Y rotation (zero)
             target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
         ], axis=1)  # Shape: (len(env_idx), 3)
+        
         # Convert to quaternion
         quat = gs.utils.geom.xyz_to_quat(euler)
         cylinder.set_quat(quat)
@@ -205,6 +209,8 @@ def main():
         # Reset the state machines
         for n in range(args.n_envs):
             sm[n].reset()
+            gripper_ctrl[n].reset()
+            pose_ctrl[n].reset()
         scene.step()
 
         # Init data storage arrays
@@ -308,8 +314,8 @@ def main():
                 yaw_des=yaw_des,
                 state_machine_states=state_machine_states)
 
-        if args.record:
-            cam.stop_recording(save_to_filename='video.mp4', fps=args.video_fps)
+    if args.record:
+        cam.stop_recording(save_to_filename='video.mp4', fps=args.video_fps)
 
 if __name__=="__main__":
     main()
