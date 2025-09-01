@@ -206,7 +206,7 @@ def main():
         quat = gs.utils.geom.xyz_to_quat(euler)
         cylinder.set_quat(quat)
 
-        # Reset the state machines
+        # Reset the state machines and controllers
         for n in range(args.n_envs):
             sm[n].reset()
             gripper_ctrl[n].reset()
