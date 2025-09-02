@@ -18,6 +18,7 @@ def read_po():
     parser.add_argument('--n_envs', type=int, default=100, help="Number of environments used per trial.")
     parser.add_argument('--angle_range', type=str, default=None, help="Space-separated list of \"min_angle max_angle step\" or None")
     parser.add_argument('--position_range', type=str, default=None, help="Space-separated list of \"min_pos max_pos step\" or None")
+    parser.add_argument('--radius_range', type=str, default=None, help="Space-separated list of \"min_r max_r\" or None")
     parser.add_argument('--video_fps', type=int, default=25, help="Output FPS of the video recording")
     return parser.parse_args()
 
@@ -25,14 +26,16 @@ def main():
     
     args = read_po()
 
-    if ((args.angle_range is None and args.position_range is None) 
-        or  (args.angle_range is not None and args.position_range is not None)):
-        print("ERROR! Not exactly one of --position_range and --angle_range needs was set!")
+    if not (np.sum([args.angle_range is not None,
+                    args.position_range is not None, 
+                    args.radius_range is not None]) == 1):
+        print("ERROR! Not exactly one of --position_range, --angle_range and --radius_range was set!")
         exit()
     elif args.angle_range is not None:
         target_angles = np.arange(*np.fromstring(args.angle_range, sep=" "))
         target_positions = np.zeros([len(target_angles), 3])
         target_positions[:, 2] = 2.0 
+        cylinder_radii = 0.03 * np.ones([len(target_angles)])
     elif args.position_range is not None:
         positional_offsets_x = np.arange(*np.fromstring(args.position_range, sep=" "))
         positional_offsets_x = positional_offsets_x.reshape([positional_offsets_x.size, 1])
@@ -40,6 +43,13 @@ def main():
                                            np.zeros_like(positional_offsets_x),
                                            2.0 * np.ones_like(positional_offsets_x)], axis=1)
         target_angles = np.zeros([len(positional_offsets_x), 1])
+        cylinder_radii = 0.03 * np.ones([len(target_angles)])
+    elif args.radius_range is not None:
+        cylinder_radii = np.arange(*np.fromstring(args.radius_range, sep=" "), 0.005)
+        target_positions = np.zeros([len(cylinder_radii), 3])
+        target_positions[:, 2] = 2.0
+        target_angles = np.zeros([len(cylinder_radii), 1])
+        
 
     gs.init(backend=gs.cpu, precision="32", logging_level='warning')
 
@@ -64,15 +74,6 @@ def main():
                 GUI    = False
             )
     plane = scene.add_entity(gs.morphs.Plane())
-
-    cylinder = scene.add_entity(
-            gs.morphs.URDF(
-                file=get_urdf_path("cylinder.urdf"),  # Path to your URDF file
-                pos=[0, 0, 2],
-                euler=[0, 90, 0.0],
-                fixed=True
-            )
-    )
     
     if args.full_vis:
         cyberzoo = scene.add_entity(
@@ -103,6 +104,16 @@ def main():
                 )
         )
 
+    cylinders = [
+        scene.add_entity(
+            gs.morphs.URDF(
+                file=get_urdf_path(f"cylinder_{cylinder_radii[i]:0.3f}.urdf"),  # Path to your URDF file
+                pos=[1000, 1000, 2],
+                euler=[0, 90, 0.0],
+                fixed=True
+            )          
+        ) for i in range(len(cylinder_radii))
+    ]
     scene.build(n_envs=args.n_envs)
 
     p_ini = np.random.uniform(low=[-1.0, -1.0, 0.25], high=[1.0, 1.0, 0.25], size=[args.n_envs, 3])
@@ -183,6 +194,7 @@ def main():
 
     # Run the monte carlo simulation
     for trial in range(len(target_angles)):
+
         scene.reset()
         
         # Set initial state gripper
@@ -193,8 +205,10 @@ def main():
         gripper.control_dofs_force(np.zeros_like(gripper.get_dofs_force()))
         
         # Init the cylinder pos
-        cylinder.set_pos(np.array([target_positions[trial, :] for _ in range(args.n_envs)]))
-        
+        cylinders[trial].set_pos(np.array([target_positions[trial, :] for _ in range(args.n_envs)]))
+        if trial > 0:
+            cylinders[trial - 1].set_pos(np.array([[1000, 1000, 2] for _ in range(args.n_envs)]))
+
         # Ensure `euler` has shape (len(env_idx), 3)
         euler = np.stack([
             np.zeros(args.n_envs),    # X rotation (zero)
@@ -204,7 +218,7 @@ def main():
         
         # Convert to quaternion
         quat = gs.utils.geom.xyz_to_quat(euler)
-        cylinder.set_quat(quat)
+        cylinders[trial].set_quat(quat)
 
         # Reset the state machines and controllers
         for n in range(args.n_envs):
@@ -304,6 +318,8 @@ def main():
             filename = f'logs/angle/trial_{int(target_angles[trial]):02}.npz'
         elif args.position_range is not None:
             filename = f'logs/position/trial_{float(target_positions[trial, 0]):.2f}.npz'
+        elif args.radius_range is not None:
+            filename = f'logs/radius/trial_{cylinder_radii[trial]:.3f}.npz'
         # Save Data
         np.savez(filename,
                 t=t,
