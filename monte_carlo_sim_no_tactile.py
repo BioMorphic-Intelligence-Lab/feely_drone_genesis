@@ -1,11 +1,79 @@
 import argparse
 import genesis as gs
 import numpy as np
+from enum import Enum
 
 from scipy.spatial.transform import Rotation as R
 from feely_drone_common import (StateMachine, PoseCtrl, GripperCtrl,
                                 SinusoidalSearchPattern,
                                 get_urdf_path)
+
+
+class SimpleState(Enum):
+    TAKEOFF = 0
+    APPROACH = 1
+    PERCH = 2
+
+class SimpleStateMachine():
+    
+    def __init__(self,
+                 dt,
+                 takeoffPosition=np.array([0, 0, 1.5]),
+                 targetPosition=np.array([0, 0, 2.0])):
+        self.dt=dt
+        self.state = SimpleState.TAKEOFF
+        self.alpha = np.ones(3)
+        self.takeoffPosition = takeoffPosition
+        self.targetPosition = targetPosition
+
+
+    def reset(self):
+        self.takeoffPosition = np.random.uniform([-1.0, -1.0, 1.5], [1.0, 1.0, 1.5])
+        self.alpha = np.ones(3)
+        self.state = SimpleState.TAKEOFF
+
+    def control(self, x):
+        
+        output = {''
+            'alpha': self.alpha,
+            'p_des': np.array([0.0, 0.0, 0.0]),
+            'v_des': np.array([0.0, 0.0, 0.0, 0.0]),
+            'yaw_des': np.zeros(1)
+        }
+
+        if self.state == SimpleState.TAKEOFF:
+            dist_vec = self.takeoffPosition - x
+            output['p_des'] = self.takeoffPosition
+            dist = np.linalg.norm(dist_vec)
+
+            if dist >= 0.2:
+                output['v_des'][:3] = 0.5 * dist_vec / np.linalg.norm(dist_vec)  
+            elif 0.1 < dist < 0.2:
+                output['v_des'][:3] = 0.1 * dist_vec / np.linalg.norm(dist_vec)  
+            elif dist < 0.1:
+                self.state = SimpleState.APPROACH
+                print("State TAKEOFF -> APPROACH")
+        elif self.state == SimpleState.APPROACH:
+            dist_vec = (self.targetPosition - np.array([0, 0, 0.15])) - x
+            output['p_des'] = self.targetPosition - np.array([0, 0, 0.15])
+            dist = np.linalg.norm(dist_vec)
+
+            if dist >= 0.2:
+                output['v_des'][:3] = 0.5 * dist_vec / np.linalg.norm(dist_vec)  
+            elif 0.1 < dist < 0.2:
+                output['v_des'][:3] = 0.1 * dist_vec / np.linalg.norm(dist_vec)  
+            elif dist < 0.1:
+                self.state = SimpleState.PERCH
+                print("State APPROACH -> PERCH")
+        elif self.state == SimpleState.PERCH:
+            output['p_des'] = self.targetPosition
+            self.alpha -= 0.5 * self.dt
+            self.alpha = np.clip(self.alpha, 0, 1)
+            output['alpha'] = self.alpha
+
+        return output
+
+
 
 def read_po():
     parser = argparse.ArgumentParser(description="Simulation of the feely drone.")
@@ -149,6 +217,12 @@ def main():
     init_target_yaw_estimate=np.zeros([1])
 
     # Reset the State Machines
+    sm_simple = np.array([
+        SimpleStateMachine(dt=args.dt)
+        for _ in range(args.n_envs)
+    ])
+
+    # Reset the State Machines
     sm = np.array([
         StateMachine(dt=args.dt,            # Delta T
                      m_arm=np.ones(3),                   # Mass of the Arm
@@ -222,7 +296,9 @@ def main():
 
         # Reset the state machines and controllers
         for n in range(args.n_envs):
+            sm_simple[n].reset()
             sm[n].reset()
+            sm[n].set_takeoff_position(sm_simple[n].takeoffPosition)
             gripper_ctrl[n].reset()
             pose_ctrl[n].reset()
         scene.step()
@@ -261,15 +337,16 @@ def main():
                     np.linalg.norm(gripper.get_links_net_contact_force()[n, 5:, :],
                                 axis=1) > 0.0,
                     [3,3]).T
-            
+                
                 sm[n].update_tactile_info_sw(contact=contact)
+                sm_return = sm[n].control(p[n, :], v[n, :], contact)
 
                 stiffness_contrib = K @ (q0 - p[n, 4:])
 
-                sm_return = sm[n].control(p[n, :], v[n, :], contact)
-                pos_ctrl = pose_ctrl[n].pos_ctrl(sm_return['p_des'], p[n,:3], sm_return['v_des'][:3], v[n, :3])
-                yaw_ctrl = pose_ctrl[n].yaw_ctrl(sm_return['yaw_des'], p[n, 3], sm_return['v_des'][3], v[n, 3])
-                tau_ctrl = gripper_ctrl[n].open_to(sm_return['alpha'])
+                sm_simple_return = sm_simple[n].control(p[n, :3])
+                pos_ctrl = pose_ctrl[n].pos_ctrl(sm_simple_return['p_des'], p[n,:3], sm_simple_return['v_des'][:3], v[n, :3])
+                yaw_ctrl = pose_ctrl[n].yaw_ctrl(sm_simple_return['yaw_des'], p[n, 3], sm_simple_return['v_des'][3], v[n, 3])
+                tau_ctrl = gripper_ctrl[n].open_to(sm_simple_return['alpha'])
                 action = np.concatenate([
                     pos_ctrl,
                     yaw_ctrl,
@@ -280,22 +357,22 @@ def main():
 
                 # Save current desired pose
                 input[n, k, :] = np.concatenate([pos_ctrl, yaw_ctrl, tau_ctrl])
-                p_des[n, k, :] = sm_return['p_des']
-                yaw_des[n, k, :] = sm_return['yaw_des']
+                p_des[n, k, :] = sm_simple_return['p_des']
+                yaw_des[n, k, :] = sm_simple_return['yaw_des']
                 state_machine_states[n, k, :] = sm[n].state.value
 
                 if args.debug:
-                    targets[n, :] = sm[n].target_pos_estimate
-                    reference_pos[n, :] = sm[n].reference_pos
+                    targets[n, :] = sm_simple[n].target_pos_estimate
+                    reference_pos[n, :] = sm_simple[n].reference_pos
                     for i in range(3):
                         for j in range(3):
-                            contact_sensors[n*9 + i * 3 + j, :] = sm[n].contact_locs[i, j, :]
+                            contact_sensors[n*9 + i * 3 + j, :] = sm_simple[n].contact_locs[i, j, :]
             
             if args.debug:
                 scene.clear_debug_objects()
                 scene.draw_debug_spheres(targets, radius=0.05, color=(1, 0, 0, 0.5))
                 scene.draw_debug_spheres(reference_pos, radius=0.05, color=(0, 0, 1, 0.5))
-                scene.draw_debug_spheres(sm[-1].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
+                scene.draw_debug_spheres(sm_simple[-1].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
                 contact_marker_color = [(0, 1, 0, 0.5) for _ in range(9)]
                 for i in range(9):
                     if contact[i // 3, i % 3]:
@@ -315,11 +392,11 @@ def main():
                 cam.render()
 
         if args.angle_range is not None:
-            filename = f'logs/angle/trial_{int(target_angles[trial]):02}.npz'
+            filename = f'logs_simple/angle/trial_{int(target_angles[trial]):02}.npz'
         elif args.position_range is not None:
-            filename = f'logs/position/trial_{float(target_positions[trial, 0]):.2f}.npz'
+            filename = f'logs_simple/position/trial_{float(target_positions[trial, 0]):.2f}.npz'
         elif args.radius_range is not None:
-            filename = f'logs/radius/trial_{cylinder_radii[trial]:.3f}.npz'
+            filename = f'logs_simple/radius/trial_{cylinder_radii[trial]:.3f}.npz'
         # Save Data
         np.savez(filename,
                 t=t,
