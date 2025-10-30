@@ -10,6 +10,9 @@ from feely_drone_common import (StateMachine, PoseCtrl, GripperCtrl,
 def read_po():
     parser = argparse.ArgumentParser(description="Simulation of the feely drone.")
     parser.add_argument('--full_vis', action='store_true', help="Flag on whether to use the full meshes for visualization.")
+    parser.add_argument('--trace', action='store_true', help="Flag on whether to plot the drone trace visualization.")
+    parser.add_argument('--trace_steps', type=int, default=1, help="At which n-th step to draw the trace.")
+    parser.add_argument('--save', action='store_true', help="Flag on whether to save the raw data.")
     parser.add_argument('--vis', action='store_true', help="Flag on whether the simulation is visualized.")
     parser.add_argument('--record', action='store_true', help="Record experiment to video")
     parser.add_argument('--dt', type=float, default=0.01, help="Simulation step size")
@@ -229,17 +232,23 @@ def main():
 
         # Init data storage arrays
         t = np.arange(0, args.T, args.dt)
-        positions = np.zeros([args.n_envs, len(t), 13], dtype=float)
-        velocities = np.zeros([args.n_envs, len(t), 13], dtype=float)
-        input = np.zeros([args.n_envs, len(t), 7], dtype=float)
-        p_des = np.zeros([args.n_envs, len(t), 3], dtype=float)
-        yaw_des = np.zeros([args.n_envs, len(t), 1], dtype=float)
-        state_machine_states = np.zeros([args.n_envs, len(t), 1], dtype=int)
+        if args.save:
+            positions = np.zeros([args.n_envs, len(t), 13], dtype=float)
+            velocities = np.zeros([args.n_envs, len(t), 13], dtype=float)
+            input = np.zeros([args.n_envs, len(t), 7], dtype=float)
+            p_des = np.zeros([args.n_envs, len(t), 3], dtype=float)
+            yaw_des = np.zeros([args.n_envs, len(t), 1], dtype=float)
+            state_machine_states = np.zeros([args.n_envs, len(t), 1], dtype=int)
+        if args.trace:
+            tracesteps = 2
+            trace = np.zeros([args.n_envs, len(t) // tracesteps, 3])
 
         # Run Monte Carlo Trial with n_envs
         for k in range(int(args.T / args.dt)):
 
             p = np.array(gripper.get_dofs_position())
+            if k % tracesteps == 0 and args.trace:
+                trace[:, k // tracesteps, :] = p[:, :3] - 0.05 * np.array([0, 0, 1])  # Trace at the tip of the gripper
             p += np.random.normal(loc=np.zeros_like(p),
                                   scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
                                                         np.zeros(9)))
@@ -279,10 +288,11 @@ def main():
                 actions[n, :] = action
 
                 # Save current desired pose
-                input[n, k, :] = np.concatenate([pos_ctrl, yaw_ctrl, tau_ctrl])
-                p_des[n, k, :] = sm_return['p_des']
-                yaw_des[n, k, :] = sm_return['yaw_des']
-                state_machine_states[n, k, :] = sm[n].state.value
+                if args.save:
+                    input[n, k, :] = np.concatenate([pos_ctrl, yaw_ctrl, tau_ctrl])
+                    p_des[n, k, :] = sm_return['p_des']
+                    yaw_des[n, k, :] = sm_return['yaw_des']
+                    state_machine_states[n, k, :] = sm[n].state.value
 
                 if args.debug:
                     targets[n, :] = sm[n].target_pos_estimate
@@ -291,6 +301,12 @@ def main():
                         for j in range(3):
                             contact_sensors[n*9 + i * 3 + j, :] = sm[n].contact_locs[i, j, :]
             
+                if args.trace and k > tracesteps:
+                    scene.draw_debug_line(start=trace[n, k // tracesteps-1, :],
+                                        end=trace[n, k // tracesteps, :],
+                                        color=(0.0/255.0, 166.0/255.0, 214.0/255.0, 0.8),
+                                        radius=0.005)
+
             if args.debug:
                 scene.clear_debug_objects()
                 scene.draw_debug_spheres(targets, radius=0.05, color=(1, 0, 0, 0.5))
@@ -307,31 +323,35 @@ def main():
             scene.step()
 
             # Save current state
-            t[k] = k * args.dt
-            positions[:, k, :] = p
-            velocities[:, k, :] = v
+            if args.save:
+                t[k] = k * args.dt
+                positions[:, k, :] = p
+                velocities[:, k, :] = v
 
             if args.record and k % int(1.0 / args.dt / args.video_fps) == 0:
                 cam.render()
 
-        if args.angle_range is not None:
-            filename = f'logs/angle/trial_{int(target_angles[trial]):02}.npz'
-        elif args.position_range is not None:
-            filename = f'logs/position/trial_{float(target_positions[trial, 0]):.2f}.npz'
-        elif args.radius_range is not None:
-            filename = f'logs/radius/trial_{cylinder_radii[trial]:.3f}.npz'
-        # Save Data
-        np.savez(filename,
-                t=t,
-                positions=positions,
-                velocities=velocities,
-                input=input,
-                p_des=p_des,
-                yaw_des=yaw_des,
-                state_machine_states=state_machine_states)
+        if args.save:
+            if args.angle_range is not None:
+                filename = f'logs/angle/trial_{int(target_angles[trial]):02}.npz'
+            elif args.position_range is not None:
+                filename = f'logs/position/trial_{float(target_positions[trial, 0]):.2f}.npz'
+            elif args.radius_range is not None:
+                filename = f'logs/radius/trial_{cylinder_radii[trial]:.3f}.npz'
+            # Save Data
+            np.savez(filename,
+                    t=t,
+                    positions=positions,
+                    velocities=velocities,
+                    input=input,
+                    p_des=p_des,
+                    yaw_des=yaw_des,
+                    state_machine_states=state_machine_states)
 
     if args.record:
+        print("Saving video...")
         cam.stop_recording(save_to_filename='video.mp4', fps=args.video_fps)
+        print("... done.")
 
 if __name__=="__main__":
     main()
