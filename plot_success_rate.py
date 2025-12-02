@@ -73,13 +73,13 @@ def compute_metrics(value_range, data_path_template):
 def init_plot():
 
     fig = plt.figure()
-    gs = gridspec.GridSpec(2, 3, hspace=0.2, wspace=0.15,
+    gs = gridspec.GridSpec(2, 3, hspace=0.075, wspace=0.025,
                            left=0.08, right=0.98, top=0.90, bottom=0.2) 
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[0, 1], sharey=ax1)
     ax3 = fig.add_subplot(gs[0, 2], sharey=ax1)
     axs = [ax1, ax2, ax3]
-    fig.set_size_inches(18, 7)
+    fig.set_size_inches(np.array([2.0, 1.0]) * 10)
 
     #fig.subplots_adjust(bottom=-0.1)
     ax1_bottom = fig.add_subplot(gs[1, 0])
@@ -219,14 +219,13 @@ def main():
     # Create an *empty global legend* on top of figure
     # bbox_to_anchor moves the legend above the top of the axes
     legend = fig.legend(loc="lower left", 
-                        bbox_to_anchor=(0.075, 0.9, 1.4, 0.),
+                        bbox_to_anchor=(0.075, 0.92, 1.4, 0.),
                         ncol=2, frameon=True,
                         handlelength=5.0,   # length of line in legend
-                        columnspacing=40,
-                        borderpad=1.6)
+                        columnspacing=51,
+                        borderpad=2.5)
 
-
-    fig.savefig("perching_success.svg")
+    fig.savefig("perching_success.svg", bbox_inches='tight')
 
 if __name__ == "__main__":
     main()
