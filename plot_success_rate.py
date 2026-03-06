@@ -116,26 +116,31 @@ def init_plot():
     ylabelpad = 45
     tickpad = 20
     axs_bottom[0].xaxis.labelpad = xlabelpad
-    axs_bottom[0].tick_params(axis='both', pad=tickpad)
+    axs_bottom[0].tick_params(axis='both', pad=tickpad, length=10)
     axs_bottom[1].xaxis.labelpad = xlabelpad
     axs_bottom[1].tick_params(axis='both', pad=tickpad)
+    axs_bottom[1].tick_params(axis='x', length=10)
     axs_bottom[1].tick_params(axis='y', labelleft=False)
     axs_bottom[2].xaxis.labelpad = xlabelpad
     axs_bottom[2].tick_params(axis='both', pad=tickpad)
     axs_bottom[2].tick_params(axis='y', labelleft=False)
+    axs_bottom[2].tick_params(axis='x', length=10)
 
     axs[0].xaxis.labelpad = xlabelpad
     axs[0].tick_params(axis='both', pad=tickpad)
     axs[0].tick_params(axis='y', labelright=False)
+    axs[0].tick_params(axis='both', length=10)
     axs[0].set_xticklabels([])
     axs[1].tick_params(axis='y', labelright=False)
     axs[1].tick_params(axis='y', labelleft=False)
+    axs[1].tick_params(axis='x', length=10)
     axs[1].set_xticklabels([])
     axs[1].xaxis.labelpad = xlabelpad
     axs[2].xaxis.labelpad = xlabelpad
     axs[2].set_xticklabels([])
     axs[2].tick_params(axis='both', pad=tickpad)
     axs[2].tick_params(axis='y', labelleft=False)
+    axs[2].tick_params(axis='x', length=10)
 
     axs[0].yaxis.labelpad = ylabelpad
     axs[1].yaxis.labelpad = ylabelpad
