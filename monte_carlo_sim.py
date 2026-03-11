@@ -2,32 +2,16 @@ import argparse
 import genesis as gs
 import numpy as np
 
-from scipy.spatial.transform import Rotation as R
-from feely_drone_common import (StateMachine, PoseCtrl, GripperCtrl,
+from transforms import (rotation_matrix_from_euler, quat_to_rotation_matrix)
+from controller import Controller
+from feely_drone_common import (StateMachine, State, GripperCtrl,
                                 SinusoidalSearchPattern,
                                 get_urdf_path)
-
-def read_po():
-    parser = argparse.ArgumentParser(description="Simulation of the feely drone.")
-    parser.add_argument('--full_vis', action='store_true', help="Flag on whether to use the full meshes for visualization.")
-    parser.add_argument('--trace', action='store_true', help="Flag on whether to plot the drone trace visualization.")
-    parser.add_argument('--trace_steps', type=int, default=1, help="At which n-th step to draw the trace.")
-    parser.add_argument('--save', action='store_true', help="Flag on whether to save the raw data.")
-    parser.add_argument('--vis', action='store_true', help="Flag on whether the simulation is visualized.")
-    parser.add_argument('--record', action='store_true', help="Record experiment to video")
-    parser.add_argument('--dt', type=float, default=0.01, help="Simulation step size")
-    parser.add_argument('--T', type=float, default=35.0, help="Simulation end time")
-    parser.add_argument('--debug', action='store_true', help="Activate debug visualizations")
-    parser.add_argument('--n_envs', type=int, default=100, help="Number of environments used per trial.")
-    parser.add_argument('--angle_range', type=str, default=None, help="Space-separated list of \"min_angle max_angle step\" or None")
-    parser.add_argument('--position_range', type=str, default=None, help="Space-separated list of \"min_pos max_pos step\" or None")
-    parser.add_argument('--radius_range', type=str, default=None, help="Space-separated list of \"min_r max_r\" or None")
-    parser.add_argument('--video_fps', type=int, default=25, help="Output FPS of the video recording")
-    return parser.parse_args()
+from sim_utils import read_po, setup_scene, run_simulation
 
 def main():
     
-    args = read_po()
+    args = read_po(description="Simulation of the feely drone.")
 
     if not (np.sum([args.angle_range is not None,
                     args.position_range is not None, 
@@ -54,74 +38,34 @@ def main():
         target_angles = np.zeros([len(cylinder_radii), 1])
         
 
-    gs.init(backend=gs.cpu, precision="32", logging_level='warning')
-
-    scene = gs.Scene(
-                viewer_options=
-                gs.options.ViewerOptions(
-                    camera_pos=(1.0, -5.0, 4.0),
-                    camera_lookat=(0.0, 0.0, 1.0),
-                    camera_fov=30,
-                    res=(960, 640),
-                    max_FPS=25,
-                ),
-                sim_options=gs.options.SimOptions(dt=args.dt),
-                show_viewer=args.vis
-            )
-
-    cam = scene.add_camera(
-                res    = (1280, 960),
-                pos    = (1.0, -5.0, 4.0),
-                lookat = (0.0, 0.0, 1.0),
-                fov    = 30,
-                GUI    = False
-            )
-    plane = scene.add_entity(gs.morphs.Plane())
-    
-    if args.full_vis:
-        cyberzoo = scene.add_entity(
-            gs.morphs.URDF(
-                    file=get_urdf_path("cyberzoo.urdf"),  # Path to your URDF file
-                    pos=[-5, -5, 0.01],
-                    euler=[0, 0, 0],
-                    fixed=True,
-                    scale=0.025  # Adjust the scale if necessary
-                )
-        )
-
-        gripper = scene.add_entity(
-            gs.morphs.URDF(
-                    file=get_urdf_path("gripper.urdf"),  # Path to your URDF file
-                    pos=[0, 0, 0],
-                    euler=[0, 0, 0],
+    cylinders = []
+    def pre_build_setup(scene_obj):
+        nonlocal cylinders
+        cylinders = [
+            scene_obj.add_entity(
+                gs.morphs.URDF(
+                    file=get_urdf_path(f"cylinder_{cylinder_radii[i]:0.3f}.urdf"),
+                    pos=[1000, 1000, 2],
+                    euler=[0, 90, 0.0],
                     fixed=True
-                )
-        )
-    else:
-        gripper = scene.add_entity(
-            gs.morphs.URDF(
-                    file=get_urdf_path("gripper_simple.urdf"),  # Path to your URDF file
-                    pos=[0, 0, 0],
-                    euler=[0, 0, 0],
-                    fixed=True
-                )
-        )
+                )          
+            ) for i in range(len(cylinder_radii))
+        ]
 
-    cylinders = [
-        scene.add_entity(
-            gs.morphs.URDF(
-                file=get_urdf_path(f"cylinder_{cylinder_radii[i]:0.3f}.urdf"),  # Path to your URDF file
-                pos=[1000, 1000, 2],
-                euler=[0, 90, 0.0],
-                fixed=True
-            )          
-        ) for i in range(len(cylinder_radii))
-    ]
-    scene.build(n_envs=args.n_envs)
+    scene, cam, gripper = setup_scene(
+        po=args,
+        cam_pos=(1.0, -5.0, 4.0),
+        cam_lookat=(0.0, 0.0, 1.0),
+        viewer_pos=(1.0, -5.0, 4.0),
+        viewer_lookat=(0.0, 0.0, 1.0),
+        max_FPS=25,
+        logging_level='warning',
+        pre_build_callback=pre_build_setup
+    )
 
     p_ini = np.random.uniform(low=[-1.0, -1.0, 0.25], high=[1.0, 1.0, 0.25], size=[args.n_envs, 3])
 
-    K = np.diag(100*np.ones(9))
+    K = np.diag(1.0 * np.ones(9)) # np.diag(100.0 * np.ones(9))
     r = np.concatenate([np.diag(0.1 * np.ones(3)) for _ in range(3)], axis=1).T    
     q0 = np.deg2rad(75) * np.ones(9)
 
@@ -142,8 +86,8 @@ def main():
     for i in range(3):
         joint = gripper.get_joint(name=f"arm{i+1}_joint1")
         
-        q = joint.get_quat()[0, :]
-        rot0[i, :, :] = R.from_quat(q, scalar_first=True).as_matrix()
+        q = joint.get_quat()[0, :].reshape(1, 4)
+        rot0[i, :, :] = quat_to_rotation_matrix(q)
 
         p0[i, :] = np.array(joint.get_pos()[0, :]) - rot0[i, :, :] @ np.array([0, 0, 0.025]) 
         
@@ -154,13 +98,13 @@ def main():
     # Reset the State Machines
     sm = np.array([
         StateMachine(dt=args.dt,            # Delta T
-                     m_arm=np.ones(3),                   # Mass of the Arm
+                     m_arm=m,                   # Mass of the Arm
                      l_arm=l,                            # Length of the Arm
                      alpha_rate=0.1,                     # Opening and closing rate
                      p0=p0,                              # Offset Position of Arms
                      rot0=rot0,                          # Offset Rotation of Arms
-                     K=np.diag(100*np.ones(3)),          # Stiffness Matrix of the arm
-                     A=-120 * np.ones(3),                # Actuation map
+                     K=K[:3, :3],                        # Stiffness Matrix of the arm
+                     A=-1.20 * np.ones(3),                # Actuation map
                      q0=np.deg2rad(75) * np.ones(3),     # Neutral joint states
                      g=np.array([0, 0, -9.81]),          # Gravity Vector
                      target_pos_estimate=init_target_pos_estimate,
@@ -180,16 +124,11 @@ def main():
 
     # Init the low leverl controllers
     pose_ctrl = np.array([
-        PoseCtrl(
-            m_total=gripper.get_mass(),
-            dt=args.dt,
-            g=np.array([0, 0, -9.81]),
-            kp=250, ki=25, kd=150,
-            ky=20, komega=5)
+        Controller(dt=args.dt)
         for _ in range(args.n_envs)
     ])
     gripper_ctrl = np.array([
-        GripperCtrl(tau_max=1250) for _ in range(args.n_envs)
+        GripperCtrl(tau_max=12.50) for _ in range(args.n_envs)
     ])
 
     if args.record:
@@ -201,9 +140,8 @@ def main():
         scene.reset()
         
         # Set initial state gripper
-        gripper.set_dofs_position(
-            np.concatenate([p_ini, np.zeros([args.n_envs, 1]), np.zeros([args.n_envs, 9])], axis=1)
-        )
+        state_ini = np.concatenate([p_ini, np.zeros([args.n_envs, 3]), np.zeros([args.n_envs, 9])], axis=1)
+        gripper.set_dofs_position(state_ini)
         gripper.set_dofs_velocity(np.zeros_like(gripper.get_dofs_velocity()))
         gripper.control_dofs_force(np.zeros_like(gripper.get_dofs_force()))
         
@@ -240,48 +178,55 @@ def main():
             yaw_des = np.zeros([args.n_envs, len(t), 1], dtype=float)
             state_machine_states = np.zeros([args.n_envs, len(t), 1], dtype=int)
         if args.trace:
-            tracesteps = 2
+            tracesteps = args.trace_steps
             trace = np.zeros([args.n_envs, len(t) // tracesteps, 3])
 
         # Run Monte Carlo Trial with n_envs
-        for k in range(int(args.T / args.dt)):
-
-            p = np.array(gripper.get_dofs_position())
-            if k % tracesteps == 0 and args.trace:
+        def step_callback(k, t_val):
+            p_full = np.array(gripper.get_dofs_position())
+            p = p_full[:, :6]
+            if args.trace and k % tracesteps == 0:
                 trace[:, k // tracesteps, :] = p[:, :3] - 0.05 * np.array([0, 0, 1])  # Trace at the tip of the gripper
-            p += np.random.normal(loc=np.zeros_like(p),
-                                  scale=np.concatenate(([0.02, 0.02, 0.02, np.deg2rad(1)],
-                                                        np.zeros(9)))
-            )
-            v = np.array(gripper.get_dofs_velocity())
-            v += np.random.normal(loc=np.zeros_like(v),
-                                  scale=np.concatenate(([0.01, 0.01, 0.01, np.deg2rad(0.1)],
-                                                        np.zeros(9)))
-            )
-            actions = np.zeros_like(p)
+            v_full = np.array(gripper.get_dofs_velocity())
+            v = v_full[:, :6]
+
+            actions = np.zeros_like(p_full)
 
             targets = np.zeros([args.n_envs, 3])
             reference_pos = np.zeros([args.n_envs, 3])
             contact_sensors = np.zeros([args.n_envs * 9, 3])
 
             for n in range(args.n_envs):
+                rot = rotation_matrix_from_euler(p_full[n, 3:6]).reshape(1, 3, 3)
 
                 contact = np.reshape(
-                    np.linalg.norm(gripper.get_links_net_contact_force()[n, 5:, :],
+                    np.linalg.norm(gripper.get_links_net_contact_force()[n, 4:, :],
                                 axis=1) > 0.0,
                     [3,3]).T
             
                 sm[n].update_tactile_info_sw(contact=contact)
 
-                stiffness_contrib = K @ (q0 - p[n, 4:])
+                stiffness_contrib = K @ (q0 - p_full[n, 6:])
 
-                sm_return = sm[n].control(p[n, :], v[n, :], contact)
-                pos_ctrl = pose_ctrl[n].pos_ctrl(sm_return['p_des'], p[n,:3], sm_return['v_des'][:3], v[n, :3])
-                yaw_ctrl = pose_ctrl[n].yaw_ctrl(sm_return['yaw_des'], p[n, 3], sm_return['v_des'][3], v[n, 3])
+                sm_return = sm[n].control(p_full[n, :], v_full[n, :], contact)
+
+         
+                body_torques, body_forces = pose_ctrl[n].go_to(
+                    loc=sm_return['p_des'], yaw_des=sm_return['yaw_des'],
+                    v_des=sm_return['v_des'][:3], 
+                    v_mag=2.0,
+                    p=p_full[n, :3].reshape(1, 3), v=v_full[n, :3].reshape(1, 3),
+                    R=rot, w_body=v_full[n, 3:6].reshape(1, 3), mass=gripper.get_mass(), g=9.81,
+                    epsilon=0.1, acc_max=2.0
+                )
+
+                world_torques = (rot @ body_torques.unsqueeze(-1)).flatten()
+                world_forces = (rot @ body_forces.unsqueeze(-1)).flatten()
+                
                 tau_ctrl = gripper_ctrl[n].open_to(sm_return['alpha'])
                 action = np.concatenate([
-                    pos_ctrl,
-                    yaw_ctrl,
+                    world_forces,
+                    world_torques,
                     stiffness_contrib - r @ tau_ctrl
                 ])
 
@@ -289,7 +234,7 @@ def main():
 
                 # Save current desired pose
                 if args.save:
-                    input[n, k, :] = np.concatenate([pos_ctrl, yaw_ctrl, tau_ctrl])
+                    input[n, k, :] = np.concatenate([world_forces, world_torques, tau_ctrl])
                     p_des[n, k, :] = sm_return['p_des']
                     yaw_des[n, k, :] = sm_return['yaw_des']
                     state_machine_states[n, k, :] = sm[n].state.value
@@ -320,16 +265,14 @@ def main():
                                          color=contact_marker_color)
 
             gripper.control_dofs_force(actions)
-            scene.step()
 
             # Save current state
             if args.save:
                 t[k] = k * args.dt
-                positions[:, k, :] = p
-                velocities[:, k, :] = v
+                positions[:, k, :] = p_full
+                velocities[:, k, :] = v_full
 
-            if args.record and k % int(1.0 / args.dt / args.video_fps) == 0:
-                cam.render()
+        run_simulation(scene, cam, args, step_callback, manage_recording=False)
 
         if args.save:
             if args.angle_range is not None:

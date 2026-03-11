@@ -137,7 +137,7 @@ def setup_scene(po, gravity=(0, 0, -9.81), cam_pos=(0.0, -7.50, 3.0), cam_lookat
     ground_plane = scene.add_entity(gs.morphs.Plane())
 
     # Add optional cyberzoo if full_vis is requested
-    """if getattr(po, 'full_vis', False):
+    if getattr(po, 'full_vis', False):
         scene.add_entity(
             gs.morphs.URDF(
                 file=get_urdf_path("cyberzoo.urdf"),
@@ -147,7 +147,6 @@ def setup_scene(po, gravity=(0, 0, -9.81), cam_pos=(0.0, -7.50, 3.0), cam_lookat
                 scale=0.025
             )
         )
-    """
 
     # Add drone
     urdf_file = get_urdf_path("gripper6dof.urdf") if (po.full_vis) else get_urdf_path("gripper6dof_simple.urdf")
