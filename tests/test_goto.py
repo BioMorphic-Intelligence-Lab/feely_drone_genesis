@@ -69,7 +69,7 @@ def main():
         if t < 2.0:
             x_des = 1.0
             y_des = 1.0
-            z_des = 2.0
+            z_des = 1.0
         elif t < 4.0:
             x_des = -1.0
             y_des = 1.0
@@ -77,15 +77,19 @@ def main():
         elif t < 6.0:
             x_des = -1.0
             y_des = -1.0
-            z_des = 2.0
+            z_des = 1.0
         elif t < 8.0:
             x_des = 1.0
             y_des = -1.0
             z_des = 2.0
-        else:
+        elif t < 10.0:
             x_des = 1.0
             y_des = 1.0
             z_des = 2.0
+        else:
+            x_des = 1.0
+            y_des = 1.0
+            z_des = 1.0
 
         pos_des = torch.tensor([[x_des, y_des, z_des]])
         yaw_des = torch.tensor([0.0])

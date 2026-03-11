@@ -359,7 +359,7 @@ class Controller(object):
             R = torch.tensor(R, device=self.device, dtype=torch.float32)
         if not isinstance(w_body, torch.Tensor):
             w_body = torch.tensor(w_body, device=self.device, dtype=torch.float32)
-        if not isinstance(v_des, torch.Tensor):
+        if v_des is not None and not isinstance(v_des, torch.Tensor):
             v_des = torch.tensor(v_des, device=self.device, dtype=torch.float32)
 
         err = loc - p
