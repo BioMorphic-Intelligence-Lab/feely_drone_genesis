@@ -59,6 +59,13 @@ def read_po(description: str = "Simulation of the flying squid."):
                        help="Space-separated list of \"min_r max_r\" or None")
     parser.add_argument('--video_fps', type=int, default=25, 
                        help="Output FPS of the video recording")
+    parser.add_argument(
+        '--target_object',
+        type=str,
+        default='cylinder',
+        choices=['cylinder', 'h_bar'],
+        help="Type of target object to use (cylinder or h_bar). Both URDFs are assumed to share the same pose.",
+    )
     return parser.parse_args()
 
 
@@ -159,13 +166,14 @@ def setup_scene(po, gravity=(0, 0, -9.81), cam_pos=(0.0, -7.50, 3.0), cam_lookat
         visualize_contact=getattr(po, 'debug', False)
     )
 
+    pre_build_objects = []
     if pre_build_callback is not None:
-        pre_build_callback(scene)
+        pre_build_objects = pre_build_callback(scene)
 
     # Build the scene
     scene.build(n_envs=po.n_envs)
 
-    return scene, cam, drone
+    return scene, cam, drone, pre_build_objects
 
 
 def run_simulation(scene, cam, po, step_callback, record_filename='media/video.mp4', manage_recording=True):

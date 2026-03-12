@@ -30,29 +30,45 @@ def main():
                                            np.zeros_like(positional_offsets_x),
                                            2.0 * np.ones_like(positional_offsets_x)], axis=1)
         target_angles = np.zeros([len(positional_offsets_x), 1])
-        cylinder_radii = 0.03 * np.ones([len(target_angles)])
+        cylinder_radii = 0.03 * np.ones_like(target_angles)
     elif args.radius_range is not None:
         cylinder_radii = np.arange(*np.fromstring(args.radius_range, sep=" "), 0.005)
         target_positions = np.zeros([len(cylinder_radii), 3])
         target_positions[:, 2] = 2.0
         target_angles = np.zeros([len(cylinder_radii), 1])
-        
 
-    cylinders = []
     def pre_build_setup(scene_obj):
-        nonlocal cylinders
-        cylinders = [
-            scene_obj.add_entity(
-                gs.morphs.URDF(
-                    file=get_urdf_path(f"cylinder_{cylinder_radii[i]:0.3f}.urdf"),
-                    pos=[1000, 1000, 2],
-                    euler=[0, 90, 0.0],
-                    fixed=True
-                )          
-            ) for i in range(len(cylinder_radii))
-        ]
+        objects = []
 
-    scene, cam, gripper = setup_scene(
+        for radius in cylinder_radii.flatten():
+            if args.target_object == "h_bar":
+                # Single H-bar target, shared across all trials
+                objects.append(
+                    scene_obj.add_entity(
+                        gs.morphs.URDF(
+                            file=get_urdf_path("h_bar.urdf"),
+                            pos=[1000, 1000, 2],
+                            euler=[0, 90, 0.0],
+                            fixed=True,
+                        )
+                    )
+                )
+            else:
+                urdf_name = f"cylinder_{radius:0.3f}.urdf"
+                objects.append(
+                    scene_obj.add_entity(
+                        gs.morphs.URDF(
+                            file=get_urdf_path(urdf_name),
+                            pos=[1000, 1000, 2],
+                            euler=[0, 90, 0.0],
+                            fixed=True,
+                        )
+                    )
+                )
+        
+        return objects
+
+    scene, cam, gripper, objects = setup_scene(
         po=args,
         cam_pos=(1.0, -5.0, 4.0),
         cam_lookat=(0.0, 0.0, 1.0),
@@ -114,7 +130,7 @@ def main():
                                 np.array([0.5, 0.5, 0]),     # Amplitude
                                 np.array([2.0, 1.0, 0.0]),   # Frequency
                                 np.array([0.0, 0.0, 0.0]),   # Phase Shift
-                                init_target_pos_estimate - np.array([0, 0, 0.075]) # Offset
+                                init_target_pos_estimate - np.array([0, 0, 0.1]) # Offset
                             ]),
                             dt=args.dt,
                             vel_norm=0.25)
@@ -146,20 +162,26 @@ def main():
         gripper.control_dofs_force(np.zeros_like(gripper.get_dofs_force()))
         
         # Init the cylinder pos
-        cylinders[trial].set_pos(np.array([target_positions[trial, :] for _ in range(args.n_envs)]))
+        objects[trial].set_pos(np.array([target_positions[trial, :] for _ in range(args.n_envs)]))
         if trial > 0:
-            cylinders[trial - 1].set_pos(np.array([[1000, 1000, 2] for _ in range(args.n_envs)]))
+            objects[trial - 1].set_pos(np.array([[1000, 1000, 2] for _ in range(args.n_envs)]))
 
-        # Ensure `euler` has shape (len(env_idx), 3)
-        euler = np.stack([
-            np.zeros(args.n_envs),    # X rotation (zero)
-            90 * np.ones(args.n_envs),    # Y rotation (zero)
-            target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
-        ], axis=1)  # Shape: (len(env_idx), 3)
+        if args.target_object == "h_bar":
+            euler = np.stack([
+                np.zeros(args.n_envs),    # X rotation (zero)
+                np.zeros(args.n_envs),    # Y rotation (zero)
+                target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
+            ], axis=1)      
+        else:
+            euler = np.stack([
+                np.zeros(args.n_envs),    # X rotation (zero)
+                90 * np.ones(args.n_envs),    # Y rotation (zero)
+                target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
+            ], axis=1)  
         
         # Convert to quaternion
         quat = gs.utils.geom.xyz_to_quat(euler)
-        cylinders[trial].set_quat(quat)
+        objects[trial].set_quat(quat)
 
         # Reset the state machines and controllers
         for n in range(args.n_envs):
