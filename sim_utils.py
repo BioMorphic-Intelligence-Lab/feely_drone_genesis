@@ -53,6 +53,8 @@ def read_po(description: str = "Simulation of the flying squid."):
                        help="Flag on whether to save the raw data.")
     parser.add_argument('--angle_range', type=str, default=None, 
                        help="Space-separated list of \"min_angle max_angle step\" or None")
+    parser.add_argument('--inclination_range', type=str, default=None, 
+                       help="Space-separated list of \"min_inclination max_inclination step\" or None")
     parser.add_argument('--position_range', type=str, default=None, 
                        help="Space-separated list of \"min_pos max_pos step\" or None")
     parser.add_argument('--radius_range', type=str, default=None, 

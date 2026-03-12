@@ -83,14 +83,22 @@ def main():
 
     if not (np.sum([args.angle_range is not None,
                     args.position_range is not None, 
-                    args.radius_range is not None]) == 1):
-        print("ERROR! Not exactly one of --position_range, --angle_range and --radius_range was set!")
+                    args.radius_range is not None,
+                    args.inclination_range is not None]) == 1):
+        print("ERROR! Not exactly one of --position_range, --angle_range, --inclination_range and --radius_range was set!")
         exit()
     elif args.angle_range is not None:
         target_angles = np.arange(*np.fromstring(args.angle_range, sep=" "))
+        target_inclinations = np.zeros([len(target_angles), 1])
         target_positions = np.zeros([len(target_angles), 3])
         target_positions[:, 2] = 2.0 
         cylinder_radii = 0.03 * np.ones([len(target_angles)])
+    elif args.inclination_range is not None:
+        target_inclinations = np.arange(*np.fromstring(args.inclination_range, sep=" "))
+        target_angles = np.zeros([len(target_inclinations), 1])
+        target_positions = np.zeros([len(target_inclinations), 3])
+        target_positions[:, 2] = 2.0 
+        cylinder_radii = 0.03 * np.ones([len(target_inclinations)])
     elif args.position_range is not None:
         positional_offsets_x = np.arange(*np.fromstring(args.position_range, sep=" "))
         positional_offsets_x = positional_offsets_x.reshape([positional_offsets_x.size, 1])
@@ -98,13 +106,15 @@ def main():
                                            np.zeros_like(positional_offsets_x),
                                            2.0 * np.ones_like(positional_offsets_x)], axis=1)
         target_angles = np.zeros([len(positional_offsets_x), 1])
+        target_inclinations = np.zeros([len(positional_offsets_x), 1])
         cylinder_radii = 0.03 * np.ones([len(target_angles)])
     elif args.radius_range is not None:
         cylinder_radii = np.arange(*np.fromstring(args.radius_range, sep=" "), 0.005)
         target_positions = np.zeros([len(cylinder_radii), 3])
         target_positions[:, 2] = 2.0
         target_angles = np.zeros([len(cylinder_radii), 1])
-        
+        target_inclinations = np.zeros([len(cylinder_radii), 1])
+
     def pre_build_setup(scene_obj):
         objects = []
         if args.target_object == "h_bar":
@@ -250,16 +260,16 @@ def main():
         if args.target_object == "h_bar":
             # Ensure `euler` has shape (len(env_idx), 3)
             euler = np.stack([
-                np.zeros(args.n_envs),    # X rotation (zero)
-                np.zeros(args.n_envs),    # Y rotation (zero)
-                target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
+                target_inclinations[trial] * np.ones(args.n_envs),    # X rotation (inclination)
+                np.zeros(args.n_envs),                                # Y rotation (zero)
+                target_angles[trial] * np.ones(args.n_envs)           # Z rotation (converted to degrees)
             ], axis=1)      
-        else:
+        elif args.target_object == "cylinder":
             # Ensure `euler` has shape (len(env_idx), 3)
             euler = np.stack([
-                np.zeros(args.n_envs),    # X rotation (zero)
-                90 * np.ones(args.n_envs),    # Y rotation (zero)
-                target_angles[trial] * np.ones(args.n_envs) # Z rotation (converted to degrees)
+                target_inclinations[trial] * np.ones(args.n_envs),    # X rotation (inclination)
+                np.zeros(args.n_envs),                            # Y rotation (90 degrees)
+                target_angles[trial] * np.ones(args.n_envs)           # Z rotation (angle)
             ], axis=1)  
         
         # Convert to quaternion
