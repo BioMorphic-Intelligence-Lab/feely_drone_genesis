@@ -26,13 +26,13 @@ def main():
         target_inclinations = np.zeros([len(target_angles), 1])
         target_positions = np.zeros([len(target_angles), 3])
         target_positions[:, 2] = 2.0 
-        cylinder_radii = 0.03 * np.ones([len(target_angles)])
+        cylinder_radii = (0.1 if args.target_object == "h_bar" else 0.03) * np.ones([len(target_angles)])
     elif args.inclination_range is not None:
         target_inclinations = np.arange(*np.fromstring(args.inclination_range, sep=" "))
         target_angles = np.zeros([len(target_inclinations), 1])
         target_positions = np.zeros([len(target_inclinations), 3])
         target_positions[:, 2] = 2.0 
-        cylinder_radii = 0.03 * np.ones([len(target_inclinations)])
+        cylinder_radii = (0.1 if args.target_object == "h_bar" else 0.03) * np.ones([len(target_inclinations)])
     elif args.position_range is not None:
         positional_offsets_x = np.arange(*np.fromstring(args.position_range, sep=" "))
         positional_offsets_x = positional_offsets_x.reshape([positional_offsets_x.size, 1])
@@ -41,7 +41,7 @@ def main():
                                            2.0 * np.ones_like(positional_offsets_x)], axis=1)
         target_angles = np.zeros([len(positional_offsets_x), 1])
         target_inclinations = np.zeros([len(positional_offsets_x), 1])
-        cylinder_radii = 0.03 * np.ones([len(target_angles)])
+        cylinder_radii = (0.1 if args.target_object == "h_bar" else 0.03) * np.ones([len(target_angles)])
     elif args.radius_range is not None:
         cylinder_radii = np.arange(*np.fromstring(args.radius_range, sep=" "), 0.005)
         target_positions = np.zeros([len(cylinder_radii), 3])
@@ -52,37 +52,28 @@ def main():
     def pre_build_setup(scene_obj):
         objects = []
 
+        # One object per radius value (cylinders or H-bars), sharing the same pose
         for radius in cylinder_radii.flatten():
-            if args.target_object == "h_bar":
-                # Single H-bar target, shared across all trials
-                objects.append(
-                    scene_obj.add_entity(
-                        gs.morphs.URDF(
-                            file=get_urdf_path("h_bar.urdf"),
-                            pos=[1000, 1000, 2],
-                            euler=[0, 90, 0.0],
-                            fixed=True,
-                        )
-                    )
-                )
+            if args.target_object == "h_bar" or args.target_object == "hbar":
+                urdf_name = f"hbar_{radius:0.3f}.urdf"
             else:
                 urdf_name = f"cylinder_{radius:0.3f}.urdf"
-                objects.append(
-                    scene_obj.add_entity(
-                        gs.morphs.URDF(
-                            file=get_urdf_path(urdf_name),
-                            pos=[1000, 1000, 2],
-                            euler=[0, 90, 0.0],
-                            fixed=True,
-                        )
+            objects.append(
+                scene_obj.add_entity(
+                    gs.morphs.URDF(
+                        file=get_urdf_path(urdf_name),
+                        pos=[1000, 1000, 2],
+                         euler=[0, 90, 0.0],
+                        fixed=True,
                     )
                 )
-        
+            )
+
         return objects
 
     scene, cam, gripper, objects = setup_scene(
         po=args,
-        cam_pos=(1.0, -5.0, 4.0),
+        cam_pos=(1.0, -5.0, 2.5),
         cam_lookat=(0.0, 0.0, 1.0),
         viewer_pos=(1.0, -5.0, 4.0),
         viewer_lookat=(0.0, 0.0, 1.0),
