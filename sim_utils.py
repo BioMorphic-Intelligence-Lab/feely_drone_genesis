@@ -134,14 +134,17 @@ def setup_scene(po, gravity=(0, 0, -9.81), cam_pos=(0.0, -7.50, 3.0), cam_lookat
         show_viewer=po.vis
     )
 
-    # Init Camera
-    cam = scene.add_camera(
-        res=(1280, 960),
-        pos=cam_pos,
-        lookat=cam_lookat,
-        fov=30,
-        GUI=False
-    )
+    # Only add camera when recording is requested; adding a camera unconditionally
+    # forces EGL offscreen renderer initialization, which fails on headless machines.
+    cam = None
+    if getattr(po, 'record', False):
+        cam = scene.add_camera(
+            res=(1280, 960),
+            pos=cam_pos,
+            lookat=cam_lookat,
+            fov=30,
+            GUI=False
+        )
 
     ground_plane = scene.add_entity(gs.morphs.Plane())
 
@@ -205,7 +208,7 @@ def run_simulation(scene, cam, po, step_callback, record_filename='media/video.m
         
         scene.step()
         
-        if po.record and step % int(1.0 / (video_fps * po.dt)) == 0:
+        if po.record and cam is not None and step % int(1.0 / (video_fps * po.dt)) == 0:
             cam.render()
             
     if po.record and manage_recording:
