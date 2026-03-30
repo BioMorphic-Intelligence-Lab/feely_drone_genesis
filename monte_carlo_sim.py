@@ -1,12 +1,13 @@
 import argparse
+import os
 import genesis as gs
 import numpy as np
 
 from transforms import (rotation_matrix_from_euler, quat_to_rotation_matrix)
 from controller import Controller
 from feely_drone_common import (StateMachine, State, GripperCtrl,
-                                SinusoidalSearchPattern,
-                                get_urdf_path)
+                                SinusoidalSearchPattern, SquareSearchPattern,
+                                SpiralSearchPattern, get_urdf_path)
 from sim_utils import read_po, setup_scene, run_simulation
 
 def main():
@@ -128,12 +129,10 @@ def main():
                      g=np.array([0, 0, -9.81]),          # Gravity Vector
                      target_pos_estimate=init_target_pos_estimate,
                      target_yaw_estimate=init_target_yaw_estimate,
-                     searching_pattern=SinusoidalSearchPattern(
-                           params=np.stack([
-                                np.array([0.5, 0.5, 0]),     # Amplitude
-                                np.array([2.0, 1.0, 0.0]),   # Frequency
-                                np.array([0.0, 0.0, 0.0]),   # Phase Shift
-                                init_target_pos_estimate - np.array([0, 0, 0.1]) # Offset
+                     searching_pattern=SpiralSearchPattern(
+                            params=np.stack([
+                                np.array([0.75, 2.0, 0.0]),     # Side length
+                                init_target_pos_estimate - np.array([0, 0, 0.1]) # Centerpoint
                             ]),
                             dt=args.dt,
                             vel_norm=0.25)
@@ -198,9 +197,9 @@ def main():
         # Init data storage arrays
         t = np.arange(0, args.T, args.dt)
         if args.save:
-            positions = np.zeros([args.n_envs, len(t), 13], dtype=float)
-            velocities = np.zeros([args.n_envs, len(t), 13], dtype=float)
-            input = np.zeros([args.n_envs, len(t), 7], dtype=float)
+            positions = np.zeros([args.n_envs, len(t), 15], dtype=float)
+            velocities = np.zeros([args.n_envs, len(t), 15], dtype=float)
+            input = np.zeros([args.n_envs, len(t), 9], dtype=float)
             p_des = np.zeros([args.n_envs, len(t), 3], dtype=float)
             yaw_des = np.zeros([args.n_envs, len(t), 1], dtype=float)
             state_machine_states = np.zeros([args.n_envs, len(t), 1], dtype=int)
@@ -302,12 +301,16 @@ def main():
         run_simulation(scene, cam, args, step_callback, manage_recording=False)
 
         if args.save:
+            obj_suffix = args.target_object.replace("_", "")
             if args.angle_range is not None:
-                filename = f'logs/angle/trial_{int(target_angles[trial]):02}.npz'
+                filename = f'logs/angle_{obj_suffix}/trial_{int(target_angles[trial]):02}.npz'
             elif args.position_range is not None:
-                filename = f'logs/position/trial_{float(target_positions[trial, 0]):.2f}.npz'
+                filename = f'logs/position_{obj_suffix}/trial_{float(target_positions[trial, 0]):.2f}.npz'
             elif args.radius_range is not None:
-                filename = f'logs/radius/trial_{cylinder_radii[trial]:.3f}.npz'
+                filename = f'logs/radius_{obj_suffix}/trial_{cylinder_radii[trial]:.3f}.npz'
+            elif args.inclination_range is not None:
+                filename = f'logs/inclination_{obj_suffix}/trial_{float(target_inclinations[trial]):.2f}.npz'
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
             # Save Data
             np.savez(filename,
                     t=t,
