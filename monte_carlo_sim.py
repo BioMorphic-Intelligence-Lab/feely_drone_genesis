@@ -129,10 +129,12 @@ def main():
                      g=np.array([0, 0, -9.81]),          # Gravity Vector
                      target_pos_estimate=init_target_pos_estimate,
                      target_yaw_estimate=init_target_yaw_estimate,
-                     searching_pattern=SpiralSearchPattern(
-                            params=np.stack([
-                                np.array([0.75, 2.0, 0.0]),     # Side length
-                                init_target_pos_estimate - np.array([0, 0, 0.1]) # Centerpoint
+                     searching_pattern=SinusoidalSearchPattern(
+                           params=np.stack([
+                                np.array([0.5, 0.5, 0]),     # Amplitude
+                                np.array([2.0, 1.0, 0.0]),   # Frequency
+                                np.array([0.0, 0.0, 0.0]),   # Phase Shift
+                                init_target_pos_estimate - np.array([0, 0, 0.1]) # Offset
                             ]),
                             dt=args.dt,
                             vel_norm=0.25)

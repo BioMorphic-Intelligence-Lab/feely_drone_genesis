@@ -20,14 +20,18 @@ COLORS = {
 
 import matplotlib as mpl
 mpl.rcParams['text.usetex'] = False
+mpl.rcParams['text.parse_math'] = False
 mpl.rcParams['svg.fonttype'] = 'none'
 mpl.rcParams['axes.unicode_minus'] = False
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Plotting script for Evaluating Monte Carlo Sim")
     parser.add_argument('--path', type=str, required=True, help="Path to data files")
+    parser.add_argument('--target_object', type=str, required=True, choices=["cylinder", "h_bar", "hbar"],
+                        help="Target object type: cylinder or h_bar/hbar")
     parser.add_argument('--pos_range', type=str, required=True, help="Space-separated list of position offset \"min max step\"")
     parser.add_argument('--ang_range', type=str, required=True, help="Space-separated list of angular offset \"min max step\"")
+    parser.add_argument('--inc_range', type=str, required=True, help="Space-separated list of inclination offset \"min max step\"")
     parser.add_argument('--rad_range', type=str, required=True, help="Space-separated list of cylinder radius \"min max step\"")
     return parser.parse_args()
 
@@ -73,152 +77,179 @@ def compute_metrics(value_range, data_path_template):
 def init_plot():
 
     fig = plt.figure()
-    gs = gridspec.GridSpec(2, 3, hspace=0.075, wspace=0.025,
-                           left=0.08, right=0.98, top=0.90, bottom=0.2) 
+    gs = gridspec.GridSpec(2, 4, hspace=0.075, wspace=0.025,
+                           left=0.08, right=0.98, top=0.90, bottom=0.2)
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[0, 1], sharey=ax1)
     ax3 = fig.add_subplot(gs[0, 2], sharey=ax1)
-    axs = [ax1, ax2, ax3]
-    fig.set_size_inches(np.array([2.0, 1.0]) * 10)
+    ax4 = fig.add_subplot(gs[0, 3], sharey=ax1)
+    axs = [ax1, ax2, ax3, ax4]
+    fig.set_size_inches(np.array([2.0, 1.0]) * 13)
 
-    #fig.subplots_adjust(bottom=-0.1)
     ax1_bottom = fig.add_subplot(gs[1, 0])
     ax2_bottom = fig.add_subplot(gs[1, 1], sharey=ax1_bottom)
     ax3_bottom = fig.add_subplot(gs[1, 2], sharey=ax1_bottom)
-    axs_bottom = [ax1_bottom, ax2_bottom, ax3_bottom]
-
-    # Formatting
-    axs_bottom[0].set_xlabel(r"Position Offset [\$m\$]")
-    axs[0].set_ylabel(r"Success Rate [%]")
-    axs_bottom[0].set_ylabel(r"Time-to-Perch [\$s\$]")
-    axs_bottom[0].set_xticks([-0.8, -0.4, 0, 0.4, 0.8])
-    axs[0].set_xticks([-0.8, -0.4, 0, 0.4, 0.8])
-    axs[0].set_yticks(np.linspace(0, 100, 5, endpoint=True))
-    axs_bottom[0].set_yticks(np.linspace(0, 60, 4, endpoint=True))
-
-    axs_bottom[1].set_xlabel(r"Angular Offset [\$^\circ\$]")
-    axs_bottom[1].set_xticks(np.linspace(-90, 90, 5))
-    axs[1].set_xticks(np.linspace(-90, 90, 5))
-    axs[1].set_yticks(np.linspace(0, 100, 5, endpoint=True))
-    axs_bottom[1].set_yticks(np.linspace(0, 60, 4, endpoint=True))
-
-    axs_bottom[2].set_xlabel(r"Cylinder Radius [\$m\$]")
-    axs_bottom[2].set_xticks(np.linspace(0.0, 0.3, 4, endpoint=True))
-    axs[2].set_xticks(np.linspace(0.0, 0.3, 4, endpoint=True))
-    axs[2].set_yticks(np.linspace(0, 100, 5, endpoint=True))
-    axs_bottom[2].set_yticks(np.linspace(0, 60, 4, endpoint=True))
-
-    axs_bottom[0].set_ylim([0, 62])
-    axs_bottom[1].set_ylim([0, 62])
-    axs_bottom[2].set_ylim([0, 62])
+    ax4_bottom = fig.add_subplot(gs[1, 3], sharey=ax1_bottom)
+    axs_bottom = [ax1_bottom, ax2_bottom, ax3_bottom, ax4_bottom]
 
     xlabelpad = 20
     ylabelpad = 45
     tickpad = 20
+
+    # Column 0 – Position Offset
+    axs[0].set_ylabel(r"Success Rate [$\%$]")
+    axs_bottom[0].set_ylabel(r"Time-to-Perch [$s$]")
+    axs_bottom[0].set_xlabel(r"Position Offset [$m$]")
+    axs_bottom[0].set_xticks([-0.8, -0.4, 0, 0.4, 0.8])
+    axs[0].set_xticks([-0.8, -0.4, 0, 0.4, 0.8])
+    axs[0].set_yticks(np.linspace(0, 100, 5, endpoint=True))
+    axs_bottom[0].set_yticks(np.linspace(0, 60, 4, endpoint=True))
+    axs_bottom[0].set_ylim([0, 62])
     axs_bottom[0].xaxis.labelpad = xlabelpad
     axs_bottom[0].tick_params(axis='both', pad=tickpad, length=10)
+    axs[0].xaxis.labelpad = xlabelpad
+    axs[0].tick_params(axis='both', pad=tickpad, length=10)
+    axs[0].tick_params(axis='y', labelright=False)
+    axs[0].set_xticklabels([])
+    axs[0].yaxis.labelpad = ylabelpad
+    axs_bottom[0].yaxis.labelpad = ylabelpad
+
+    # Column 1 – Angular Offset
+    axs_bottom[1].set_xlabel(r"Angular Offset [$^\circ$]")
+    axs_bottom[1].set_xticks(np.linspace(-90, 90, 5))
+    axs[1].set_xticks(np.linspace(-90, 90, 5))
+    axs[1].set_yticks(np.linspace(0, 100, 5, endpoint=True))
+    axs_bottom[1].set_yticks(np.linspace(0, 60, 4, endpoint=True))
+    axs_bottom[1].set_ylim([0, 62])
     axs_bottom[1].xaxis.labelpad = xlabelpad
     axs_bottom[1].tick_params(axis='both', pad=tickpad)
     axs_bottom[1].tick_params(axis='x', length=10)
     axs_bottom[1].tick_params(axis='y', labelleft=False)
-    axs_bottom[2].xaxis.labelpad = xlabelpad
-    axs_bottom[2].tick_params(axis='both', pad=tickpad)
-    axs_bottom[2].tick_params(axis='y', labelleft=False)
-    axs_bottom[2].tick_params(axis='x', length=10)
-
-    axs[0].xaxis.labelpad = xlabelpad
-    axs[0].tick_params(axis='both', pad=tickpad)
-    axs[0].tick_params(axis='y', labelright=False)
-    axs[0].tick_params(axis='both', length=10)
-    axs[0].set_xticklabels([])
-    axs[1].tick_params(axis='y', labelright=False)
-    axs[1].tick_params(axis='y', labelleft=False)
+    axs[1].tick_params(axis='y', labelright=False, labelleft=False)
     axs[1].tick_params(axis='x', length=10)
     axs[1].set_xticklabels([])
     axs[1].xaxis.labelpad = xlabelpad
-    axs[2].xaxis.labelpad = xlabelpad
-    axs[2].set_xticklabels([])
-    axs[2].tick_params(axis='both', pad=tickpad)
-    axs[2].tick_params(axis='y', labelleft=False)
-    axs[2].tick_params(axis='x', length=10)
-
-    axs[0].yaxis.labelpad = ylabelpad
     axs[1].yaxis.labelpad = ylabelpad
-    axs[2].yaxis.labelpad = ylabelpad
-    axs_bottom[0].yaxis.labelpad = ylabelpad
     axs_bottom[1].yaxis.labelpad = ylabelpad
+
+    # Column 2 – Inclination Offset
+    axs_bottom[2].set_xlabel(r"Inclination Offset [$^\circ$]")
+    axs_bottom[2].set_xticks(np.linspace(-90, 90, 5))
+    axs[2].set_xticks(np.linspace(-90, 90, 5))
+    axs[2].set_yticks(np.linspace(0, 100, 5, endpoint=True))
+    axs_bottom[2].set_yticks(np.linspace(0, 60, 4, endpoint=True))
+    axs_bottom[2].set_ylim([0, 62])
+    axs_bottom[2].xaxis.labelpad = xlabelpad
+    axs_bottom[2].tick_params(axis='both', pad=tickpad)
+    axs_bottom[2].tick_params(axis='x', length=10)
+    axs_bottom[2].tick_params(axis='y', labelleft=False)
+    axs[2].tick_params(axis='y', labelright=False, labelleft=False)
+    axs[2].tick_params(axis='x', length=10)
+    axs[2].set_xticklabels([])
+    axs[2].xaxis.labelpad = xlabelpad
+    axs[2].yaxis.labelpad = ylabelpad
     axs_bottom[2].yaxis.labelpad = ylabelpad
+
+    # Column 3 – Cylinder Radius
+    axs_bottom[3].set_xlabel(r"Cylinder Radius [$m$]")
+    axs_bottom[3].set_xticks(np.linspace(0.0, 0.3, 4, endpoint=True))
+    axs[3].set_xticks(np.linspace(0.0, 0.3, 4, endpoint=True))
+    axs[3].set_yticks(np.linspace(0, 100, 5, endpoint=True))
+    axs_bottom[3].set_yticks(np.linspace(0, 60, 4, endpoint=True))
+    axs_bottom[3].set_ylim([0, 62])
+    axs_bottom[3].xaxis.labelpad = xlabelpad
+    axs_bottom[3].tick_params(axis='both', pad=tickpad)
+    axs_bottom[3].tick_params(axis='x', length=10)
+    axs_bottom[3].tick_params(axis='y', labelleft=False)
+    axs[3].tick_params(axis='both', pad=tickpad)
+    axs[3].tick_params(axis='y', labelleft=False)
+    axs[3].tick_params(axis='x', length=10)
+    axs[3].set_xticklabels([])
+    axs[3].xaxis.labelpad = xlabelpad
+    axs[3].yaxis.labelpad = ylabelpad
+    axs_bottom[3].yaxis.labelpad = ylabelpad
 
     return fig, axs, axs_bottom
 
 def plot_results(fig, axs, axs_bottom, color, label,
-                 pos_ran, ang_ran, rad_ran,
-                 success_rate_pos, success_rate_ang, success_rate_rad,
-                 time_to_perch_pos, time_to_perch_ang, time_to_perch_rad,
-                 time_to_perch_std_pos, time_to_perch_std_ang, time_to_perch_std_rad):
-        
-    # Success Rate Bar Plots
-    axs[0].step(pos_ran, success_rate_pos, color=color, label=label, where='post')
-    #fig.legend(loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=2)
-    #, width=0.9 * (pos_ran[1] - pos_ran[0]), alpha=0.8)
-    axs[1].step(ang_ran, success_rate_ang, color=color, where='post')#, width=0.9 * (ang_ran[1] - ang_ran[0]), alpha=0.8)
-    axs[2].step(rad_ran, success_rate_rad, color=color, where='post')#, width=0.9 * (rad_ran[1] - rad_ran[0]), alpha=0.8)
+                 pos_ran, ang_ran, inc_ran, rad_ran,
+                 success_rate_pos, success_rate_ang, success_rate_inc, success_rate_rad,
+                 time_to_perch_pos, time_to_perch_ang, time_to_perch_inc, time_to_perch_rad,
+                 time_to_perch_std_pos, time_to_perch_std_ang, time_to_perch_std_inc, time_to_perch_std_rad):
 
-    # Set xlims
+    # Success Rate step plots
+    axs[0].step(pos_ran, success_rate_pos, color=color, label=label, where='post')
+    axs[1].step(ang_ran, success_rate_ang, color=color, where='post')
+    axs[2].step(inc_ran, success_rate_inc, color=color, where='post')
+    axs[3].step(rad_ran, success_rate_rad, color=color, where='post')
+
+    # x-limits
     axs[0].set_xlim([pos_ran[0]  - 0.5 * (pos_ran[1] - pos_ran[0]),
                      pos_ran[-1] + 0.5 * (pos_ran[1] - pos_ran[0])])
     axs[1].set_xlim([ang_ran[0]  - 0.5 * (ang_ran[1] - ang_ran[0]),
                      ang_ran[-1] + 0.5 * (ang_ran[1] - ang_ran[0])])
-    axs[2].set_xlim([0,
+    axs[2].set_xlim([inc_ran[0]  - 0.5 * (inc_ran[1] - inc_ran[0]),
+                     inc_ran[-1] + 0.5 * (inc_ran[1] - inc_ran[0])])
+    axs[3].set_xlim([0,
                      rad_ran[-1] + 0.5 * (rad_ran[1] - rad_ran[0])])
     axs_bottom[0].set_xlim([pos_ran[0]  - 0.5 * (pos_ran[1] - pos_ran[0]),
                             pos_ran[-1] + 0.5 * (pos_ran[1] - pos_ran[0])])
     axs_bottom[1].set_xlim([ang_ran[0]  - 0.5 * (ang_ran[1] - ang_ran[0]),
                             ang_ran[-1] + 0.5 * (ang_ran[1] - ang_ran[0])])
-    axs_bottom[2].set_xlim([0,
+    axs_bottom[2].set_xlim([inc_ran[0]  - 0.5 * (inc_ran[1] - inc_ran[0]),
+                            inc_ran[-1] + 0.5 * (inc_ran[1] - inc_ran[0])])
+    axs_bottom[3].set_xlim([0,
                             rad_ran[-1] + 0.5 * (rad_ran[1] - rad_ran[0])])
     axs[0].set_ylim([0, 102.5])
     axs[1].set_ylim([0, 102.5])
     axs[2].set_ylim([0, 102.5])
-    
-    # Time-to-Perch Error Bars
+    axs[3].set_ylim([0, 102.5])
+
+    # Time-to-Perch error bars + step plots
     axs_bottom[0].errorbar(pos_ran, time_to_perch_pos, time_to_perch_std_pos, linestyle='None', marker='o', color=color, capsize=2, markersize=0, alpha=0.3)
     axs_bottom[0].step(pos_ran, time_to_perch_pos, color=color, zorder=10, where='post')
     axs_bottom[1].errorbar(ang_ran, time_to_perch_ang, time_to_perch_std_ang, linestyle='None', marker='o', color=color, capsize=2, markersize=0, alpha=0.3)
     axs_bottom[1].step(ang_ran, time_to_perch_ang, color=color, zorder=10, where='post')
-    axs_bottom[2].errorbar(rad_ran, time_to_perch_rad, time_to_perch_std_rad, linestyle='None', marker='o', color=color, capsize=2, markersize=0, alpha=0.3)
-    axs_bottom[2].step(rad_ran, time_to_perch_rad, color=color, zorder=10, where='post')
+    axs_bottom[2].errorbar(inc_ran, time_to_perch_inc, time_to_perch_std_inc, linestyle='None', marker='o', color=color, capsize=2, markersize=0, alpha=0.3)
+    axs_bottom[2].step(inc_ran, time_to_perch_inc, color=color, zorder=10, where='post')
+    axs_bottom[3].errorbar(rad_ran, time_to_perch_rad, time_to_perch_std_rad, linestyle='None', marker='o', color=color, capsize=2, markersize=0, alpha=0.3)
+    axs_bottom[3].step(rad_ran, time_to_perch_rad, color=color, zorder=10, where='post')
 
 def main():
     args = parse_arguments()
     
     pos_ran = np.arange(*np.fromstring(args.pos_range, sep=" "))
     ang_ran = np.arange(*np.fromstring(args.ang_range, sep=" "), dtype=int)
+    inc_ran = np.arange(*np.fromstring(args.inc_range, sep=" "), dtype=int)
     rad_ran = np.arange(*np.fromstring(args.rad_range, sep=" "))
-    
+
+    obj_suffix = args.target_object.replace("_", "")
+
     fig, axs, axs_bottom = init_plot()
 
-    success_rate_pos, time_to_perch_pos, time_to_perch_std_pos = compute_metrics(pos_ran, args.path + "logs/position/trial_{:.2f}.npz")
-    success_rate_ang, time_to_perch_ang, time_to_perch_std_ang = compute_metrics(ang_ran, args.path + "logs/angle/trial_{:02d}.npz")
-    success_rate_rad, time_to_perch_rad, time_to_perch_std_rad = compute_metrics(rad_ran, args.path + "logs/radius/trial_{:.3f}.npz")
+    success_rate_pos, time_to_perch_pos, time_to_perch_std_pos = compute_metrics(pos_ran, args.path + f"logs/position_{obj_suffix}/trial_{{:.2f}}.npz")
+    success_rate_ang, time_to_perch_ang, time_to_perch_std_ang = compute_metrics(ang_ran, args.path + f"logs/angle_{obj_suffix}/trial_{{:02d}}.npz")
+    success_rate_inc, time_to_perch_inc, time_to_perch_std_inc = compute_metrics(inc_ran, args.path + f"logs/inclination_{obj_suffix}/trial_{{:.2f}}.npz")
+    success_rate_rad, time_to_perch_rad, time_to_perch_std_rad = compute_metrics(rad_ran, args.path + f"logs/radius_{obj_suffix}/trial_{{:.3f}}.npz")
 
-    success_rate_pos_baseline, time_to_perch_pos_baseline, time_to_perch_std_pos_baseline = compute_metrics(pos_ran, args.path + "logs_simple/position/trial_{:.2f}.npz")
-    success_rate_ang_baseline, time_to_perch_ang_baseline, time_to_perch_std_ang_baseline = compute_metrics(ang_ran, args.path + "logs_simple/angle/trial_{:02d}.npz")
-    success_rate_rad_baseline, time_to_perch_rad_baseline, time_to_perch_std_rad_baseline = compute_metrics(rad_ran, args.path + "logs_simple/radius/trial_{:.3f}.npz")
-    
+    success_rate_pos_bl, time_to_perch_pos_bl, time_to_perch_std_pos_bl = compute_metrics(pos_ran, args.path + f"logs_simple/position_{obj_suffix}/trial_{{:.2f}}.npz")
+    success_rate_ang_bl, time_to_perch_ang_bl, time_to_perch_std_ang_bl = compute_metrics(ang_ran, args.path + f"logs_simple/angle_{obj_suffix}/trial_{{:02d}}.npz")
+    success_rate_inc_bl, time_to_perch_inc_bl, time_to_perch_std_inc_bl = compute_metrics(inc_ran, args.path + f"logs_simple/inclination_{obj_suffix}/trial_{{:.2f}}.npz")
+    success_rate_rad_bl, time_to_perch_rad_bl, time_to_perch_std_rad_bl = compute_metrics(rad_ran, args.path + f"logs_simple/radius_{obj_suffix}/trial_{{:.3f}}.npz")
+
     plot_results(fig, axs, axs_bottom, COLORS["biomorphic_blue_complimentary"],
                  "Non-tactile Feedforward Perching",
-                 pos_ran, ang_ran, rad_ran,
-                 success_rate_pos_baseline, success_rate_ang_baseline, success_rate_rad_baseline,
-                 time_to_perch_pos_baseline, time_to_perch_ang_baseline, time_to_perch_rad_baseline,
-                 time_to_perch_std_pos_baseline, time_to_perch_std_ang_baseline, time_to_perch_std_rad_baseline)
-    
+                 pos_ran, ang_ran, inc_ran, rad_ran,
+                 success_rate_pos_bl, success_rate_ang_bl, success_rate_inc_bl, success_rate_rad_bl,
+                 time_to_perch_pos_bl, time_to_perch_ang_bl, time_to_perch_inc_bl, time_to_perch_rad_bl,
+                 time_to_perch_std_pos_bl, time_to_perch_std_ang_bl, time_to_perch_std_inc_bl, time_to_perch_std_rad_bl)
+
     plot_results(fig, axs, axs_bottom, COLORS["biomorphic_blue"],
                  "Tactile Perching (\\textbf{Ours})                                                                                             ",
-                 pos_ran, ang_ran, rad_ran,
-                 success_rate_pos, success_rate_ang, success_rate_rad,
-                 time_to_perch_pos, time_to_perch_ang, time_to_perch_rad,
-                 time_to_perch_std_pos, time_to_perch_std_ang, time_to_perch_std_rad)
+                 pos_ran, ang_ran, inc_ran, rad_ran,
+                 success_rate_pos, success_rate_ang, success_rate_inc, success_rate_rad,
+                 time_to_perch_pos, time_to_perch_ang, time_to_perch_inc, time_to_perch_rad,
+                 time_to_perch_std_pos, time_to_perch_std_ang, time_to_perch_std_inc, time_to_perch_std_rad)
     
 
     # Create an *empty global legend* on top of figure
