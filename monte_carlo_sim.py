@@ -10,6 +10,7 @@ from feely_drone_common import (StateMachine, State, GripperCtrl,
                                 SpiralSearchPattern, get_urdf_path)
 from sim_utils import read_po, setup_scene, run_simulation
 
+
 def main():
     
     args = read_po(description="Simulation of the feely drone.")
@@ -115,6 +116,33 @@ def main():
     init_target_pos_estimate=np.array([0, 0, 1.9])
     init_target_yaw_estimate=np.zeros([1])
 
+
+    searching_pattern = {
+        "sinusoidal": SinusoidalSearchPattern(
+        params=np.stack([
+            np.array([0.5, 0.5, 0]),     # Amplitude
+            np.array([2.0, 1.0, 0.0]),   # Frequency
+            np.array([0.0, 0.0, 0.0]),   # Phase Shift
+            init_target_pos_estimate - np.array([0, 0, 0.1]) # Offset
+        ]),
+        dt=args.dt,
+        vel_norm=0.25),
+        "square": SquareSearchPattern(
+            params=np.stack([
+                np.array([0.5, 0, 0]),     # Side length
+                init_target_pos_estimate - np.array([0, 0, 0.1]),            # Centerpoint
+            ]),
+            dt=args.dt,
+            vel_norm=0.25),
+        "spiral": SpiralSearchPattern(
+            params=np.stack([
+                np.array([0.5, 2.0, 0]),     # Max Radius & Rotation Speed
+                init_target_pos_estimate - np.array([0, 0, 0.1]),         # Centerpoint
+            ]),
+            dt=args.dt,
+            vel_norm=0.25)
+    }
+
     # Reset the State Machines
     sm = np.array([
         StateMachine(dt=args.dt,            # Delta T
@@ -129,16 +157,7 @@ def main():
                      g=np.array([0, 0, -9.81]),          # Gravity Vector
                      target_pos_estimate=init_target_pos_estimate,
                      target_yaw_estimate=init_target_yaw_estimate,
-                     searching_pattern=SinusoidalSearchPattern(
-                           params=np.stack([
-                                np.array([0.5, 0.5, 0]),     # Amplitude
-                                np.array([2.0, 1.0, 0.0]),   # Frequency
-                                np.array([0.0, 0.0, 0.0]),   # Phase Shift
-                                init_target_pos_estimate - np.array([0, 0, 0.1]) # Offset
-                            ]),
-                            dt=args.dt,
-                            vel_norm=0.25)
-        )
+                     searching_pattern=searching_pattern[args.search_pattern])
         for _ in range(args.n_envs)
     ])
 

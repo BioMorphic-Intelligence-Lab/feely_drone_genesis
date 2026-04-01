@@ -68,6 +68,9 @@ def read_po(description: str = "Simulation of the flying squid."):
         choices=['cylinder', 'h_bar'],
         help="Type of target object to use (cylinder or h_bar). Both URDFs are assumed to share the same pose.",
     )
+    parser.add_argument('--search_pattern', type=str, default='sinusoidal',
+                       choices=['sinusoidal', 'square', 'spiral'],
+                       help="Type of search pattern to use (sinusoidal, square, spiral)")
     return parser.parse_args()
 
 
