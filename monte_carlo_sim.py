@@ -6,7 +6,7 @@ import numpy as np
 from transforms import (rotation_matrix_from_euler, quat_to_rotation_matrix)
 from controller import Controller
 from feely_drone_common import (StateMachine, State, GripperCtrl,
-                                SinusoidalSearchPattern, SquareSearchPattern,
+                                LinearSearchPattern,SinusoidalSearchPattern, SquareSearchPattern,
                                 SpiralSearchPattern, get_urdf_path)
 from sim_utils import read_po, setup_scene, run_simulation
 
@@ -118,6 +118,13 @@ def main():
 
 
     searching_pattern = {
+        "linear": LinearSearchPattern(
+            params=np.stack([
+                np.array([0.5, 0, 0]),     # Side length
+                init_target_pos_estimate - np.array([0.25, 0, 0.1]),            # Centerpoint
+            ]),
+            dt=args.dt,
+            vel_norm=0.25),
         "sinusoidal": SinusoidalSearchPattern(
         params=np.stack([
             np.array([0.5, 0.5, 0]),     # Amplitude
