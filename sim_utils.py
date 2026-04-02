@@ -29,9 +29,9 @@ def read_po(description: str = "Simulation of the flying squid."):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--vis', action='store_true', 
                        help="Flag on whether the simulation is visualized.")
-    parser.add_argument('--dt', type=float, default=0.002, 
+    parser.add_argument('--dt', type=float, default=0.01, 
                        help="Simulation step size")
-    parser.add_argument('--T', type=float, default=20.0, 
+    parser.add_argument('--T', type=float, default=60.0, 
                        help="Simulation end time")
     parser.add_argument('--noise', action='store_true', 
                        help="Flag on whether to add noise to the simulation.")

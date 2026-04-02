@@ -236,7 +236,10 @@ def main():
             trace = np.zeros([args.n_envs, len(t) // tracesteps, 3])
 
         # Run Monte Carlo Trial with n_envs
+        steps_per_second = int(round(1.0 / args.dt))
         def step_callback(k, t_val):
+            if k > 0 and k % steps_per_second == 0:
+                print(f"  Trial {trial}: sim time {t_val:.0f}s / {args.T:.0f}s")
             p_full = np.array(gripper.get_dofs_position())
 
             if args.noise:

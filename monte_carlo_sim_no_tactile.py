@@ -286,7 +286,10 @@ def main():
         state_machine_states = np.zeros([args.n_envs, len(t), 1], dtype=int)
 
         # Run Monte Carlo Trial with n_envs (6-DoF base model)
+        steps_per_second = int(round(1.0 / args.dt))
         for k in range(int(args.T / args.dt)):
+            if k > 0 and k % steps_per_second == 0:
+                print(f"  Trial {trial}: sim time {k * args.dt:.0f}s / {args.T:.0f}s")
 
             p_full = np.array(gripper.get_dofs_position())
             v_full = np.array(gripper.get_dofs_velocity())
