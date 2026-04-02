@@ -33,6 +33,8 @@ def read_po(description: str = "Simulation of the flying squid."):
                        help="Simulation step size")
     parser.add_argument('--T', type=float, default=20.0, 
                        help="Simulation end time")
+    parser.add_argument('--noise', action='store_true', 
+                       help="Flag on whether to add noise to the simulation.")
     parser.add_argument('--record', action='store_true', 
                        help="Record experiment to video")
     parser.add_argument('--plot', action='store_true', 

@@ -290,6 +290,13 @@ def main():
 
             p_full = np.array(gripper.get_dofs_position())
             v_full = np.array(gripper.get_dofs_velocity())
+
+            if args.noise:
+                # Add noise to the position
+                p_full[:, :3] += np.random.normal(0, 0.02, size=p_full[:, :3].shape)
+                # Add noise to the velocity
+                v_full[:, :3] += np.random.normal(0, 0.01, size=v_full[:, :3].shape)
+
             actions = np.zeros_like(p_full)
 
             targets = np.zeros([args.n_envs, 3])

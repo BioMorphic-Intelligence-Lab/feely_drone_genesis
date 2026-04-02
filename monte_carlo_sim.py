@@ -238,10 +238,22 @@ def main():
         # Run Monte Carlo Trial with n_envs
         def step_callback(k, t_val):
             p_full = np.array(gripper.get_dofs_position())
+
+            if args.noise:
+            # Add noise to the position
+                p_full[:, :3] += np.random.normal(0, 0.02, size=p_full[:, :3].shape)
+            
             p = p_full[:, :6]
             if args.trace and k % tracesteps == 0:
                 trace[:, k // tracesteps, :] = p[:, :3] - 0.05 * np.array([0, 0, 1])  # Trace at the tip of the gripper
             v_full = np.array(gripper.get_dofs_velocity())
+            
+            if args.noise:
+                # Add noise to the velocity
+                v_full[:, :3] += np.random.normal(0, 0.01, size=v_full[:, :3].shape)
+
+            # Add noise to the velocity
+            v_full[:, :3] += np.random.normal(0, 0.01, size=v_full[:, :3].shape)
             v = v_full[:, :6]
 
             actions = np.zeros_like(p_full)
@@ -308,6 +320,8 @@ def main():
 
             if args.debug:
                 scene.clear_debug_objects()
+                scene.draw_debug_arrow(p[:, :3], sm_return['v_des'][:3],
+                                       color=(255.0/255.0, 200.0/255.0, 0.0/255.0, 0.8))
                 scene.draw_debug_spheres(targets, radius=0.05, color=(1, 0, 0, 0.5))
                 scene.draw_debug_spheres(reference_pos, radius=0.05, color=(0, 0, 1, 0.5))
                 scene.draw_debug_spheres(sm[-1].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
