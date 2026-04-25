@@ -113,7 +113,7 @@ def main():
         p0[i, :] = np.array(joint.get_pos()[0, :]) - rot0[i, :, :] @ np.array([0, 0, 0.025]) 
         
     # Initial target position estimate
-    init_target_pos_estimate=np.array([0, 0, 1.9])
+    init_target_pos_estimate=np.array([0, 0, 1.95])
     init_target_yaw_estimate=np.zeros([1])
 
 
@@ -262,6 +262,7 @@ def main():
             actions = np.zeros_like(p_full)
 
             targets = np.zeros([args.n_envs, 3])
+            vel_cmd = np.zeros([args.n_envs, 3])
             reference_pos = np.zeros([args.n_envs, 3])
             contact_sensors = np.zeros([args.n_envs * 9, 3])
 
@@ -311,6 +312,7 @@ def main():
                 if args.debug:
                     targets[n, :] = sm[n].target_pos_estimate
                     reference_pos[n, :] = sm[n].reference_pos
+                    vel_cmd[n, :] = sm_return['v_des'][:3]
                     for i in range(3):
                         for j in range(3):
                             contact_sensors[n*9 + i * 3 + j, :] = sm[n].contact_locs[i, j, :]
@@ -323,8 +325,9 @@ def main():
 
             if args.debug:
                 scene.clear_debug_objects()
-                scene.draw_debug_arrow(p[:, :3], sm_return['v_des'][:3],
-                                       color=(255.0/255.0, 200.0/255.0, 0.0/255.0, 0.8))
+                for n in range(args.n_envs):
+                    scene.draw_debug_arrow(p[n, :3], vel_cmd[n, :],
+                                        color=(255.0/255.0, 200.0/255.0, 0.0/255.0, 0.8))
                 scene.draw_debug_spheres(targets, radius=0.05, color=(1, 0, 0, 0.5))
                 scene.draw_debug_spheres(reference_pos, radius=0.05, color=(0, 0, 1, 0.5))
                 scene.draw_debug_spheres(sm[-1].searching_pattern.traj_dis, radius=0.025, color=(0.5, 0.5, 0.5, 0.5))
@@ -346,15 +349,16 @@ def main():
         run_simulation(scene, cam, args, step_callback, manage_recording=False)
 
         if args.save:
+            save_dir = args.save
             obj_suffix = args.target_object.replace("_", "")
             if args.angle_range is not None:
-                filename = f'logs/angle_{obj_suffix}/trial_{int(target_angles[trial]):02}.npz'
+                filename = os.path.join(save_dir, f'angle_{obj_suffix}/trial_{int(target_angles[trial]):02}.npz')
             elif args.position_range is not None:
-                filename = f'logs/position_{obj_suffix}/trial_{float(target_positions[trial, 0]):.2f}.npz'
+                filename = os.path.join(save_dir, f'position_{obj_suffix}/trial_{float(target_positions[trial, 0]):.2f}.npz')
             elif args.radius_range is not None:
-                filename = f'logs/radius_{obj_suffix}/trial_{cylinder_radii[trial]:.3f}.npz'
+                filename = os.path.join(save_dir, f'radius_{obj_suffix}/trial_{cylinder_radii[trial]:.3f}.npz')
             elif args.inclination_range is not None:
-                filename = f'logs/inclination_{obj_suffix}/trial_{float(target_inclinations[trial]):.2f}.npz'
+                filename = os.path.join(save_dir, f'inclination_{obj_suffix}/trial_{float(target_inclinations[trial]):.2f}.npz')
             os.makedirs(os.path.dirname(filename), exist_ok=True)
             # Save Data
             np.savez(filename,

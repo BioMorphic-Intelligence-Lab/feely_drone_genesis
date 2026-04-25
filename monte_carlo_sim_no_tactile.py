@@ -179,7 +179,7 @@ def main():
         )
         
     # Initial target position estimate
-    init_target_pos_estimate=np.array([0, 0, 2.05])
+    init_target_pos_estimate=np.array([0, 0, 2.1])
     init_target_yaw_estimate=np.zeros([1])
 
     # Reset the State Machines
@@ -280,7 +280,7 @@ def main():
         t = np.arange(0, args.T, args.dt)
         positions = np.zeros([args.n_envs, len(t), 15], dtype=float)
         velocities = np.zeros([args.n_envs, len(t), 15], dtype=float)
-        input = np.zeros([args.n_envs, len(t), 9], dtype=float)
+        input = np.zeros([args.n_envs, len(t), 15], dtype=float)
         p_des = np.zeros([args.n_envs, len(t), 3], dtype=float)
         yaw_des = np.zeros([args.n_envs, len(t), 1], dtype=float)
         state_machine_states = np.zeros([args.n_envs, len(t), 1], dtype=int)
@@ -390,15 +390,16 @@ def main():
             if args.record and k % int(1.0 / args.dt / args.video_fps) == 0:
                 cam.render()
         if args.save:
+            save_dir = args.save
             obj_suffix = args.target_object.replace("_", "")
             if args.angle_range is not None:
-                filename = f'logs_simple/angle_{obj_suffix}/trial_{int(target_angles[trial]):02}.npz'
+                filename = os.path.join(save_dir, f'angle_{obj_suffix}/trial_{int(target_angles[trial]):02}.npz')
             elif args.position_range is not None:
-                filename = f'logs_simple/position_{obj_suffix}/trial_{float(target_positions[trial, 0]):.2f}.npz'
+                filename = os.path.join(save_dir, f'position_{obj_suffix}/trial_{float(target_positions[trial, 0]):.2f}.npz')
             elif args.radius_range is not None:
-                filename = f'logs_simple/radius_{obj_suffix}/trial_{cylinder_radii[trial]:.3f}.npz'
+                filename = os.path.join(save_dir, f'radius_{obj_suffix}/trial_{cylinder_radii[trial]:.3f}.npz')
             elif args.inclination_range is not None:
-                filename = f'logs_simple/inclination_{obj_suffix}/trial_{float(target_inclinations[trial]):.2f}.npz'
+                filename = os.path.join(save_dir, f'inclination_{obj_suffix}/trial_{float(target_inclinations[trial]):.2f}.npz')
             os.makedirs(os.path.dirname(filename), exist_ok=True)
             # Save Data
             np.savez(filename,

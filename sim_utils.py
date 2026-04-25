@@ -51,8 +51,8 @@ def read_po(description: str = "Simulation of the flying squid."):
                        help="Flag on whether to plot the drone trace visualization.")
     parser.add_argument('--trace_steps', type=int, default=1, 
                        help="At which n-th step to draw the trace.")
-    parser.add_argument('--save', action='store_true', 
-                       help="Flag on whether to save the raw data.")
+    parser.add_argument('--save', nargs='?', const='logs', default=None,
+                       help="Save raw data. Optionally provide a directory path (default: logs).")
     parser.add_argument('--angle_range', type=str, default=None, 
                        help="Space-separated list of \"min_angle max_angle step\" or None")
     parser.add_argument('--inclination_range', type=str, default=None, 
